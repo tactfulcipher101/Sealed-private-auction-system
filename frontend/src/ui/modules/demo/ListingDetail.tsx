@@ -37,7 +37,7 @@ export function ListingDetail({ listing, isOwnListing, onEnterBidding, onBack }:
         <p className="text-sm text-slate-400 leading-relaxed">{listing.description}</p>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="p-4 rounded-lg bg-slate-900/40 border border-slate-800">
           <p className="text-xs text-slate-500">Reserve price</p>
           <p className="text-base font-mono text-slate-100 mt-1">

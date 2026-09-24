@@ -63,14 +63,14 @@ export function AuctionDemo() {
 
   if (!userWallet) {
     return (
-      <div className="max-w-2xl mx-auto px-6 py-16">
+      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-10 sm:py-16">
         <WalletConnect onConnected={setUserWallet} />
       </div>
     );
   }
 
   return (
-    <div className="max-w-2xl mx-auto px-6 py-16">
+    <div className="max-w-2xl mx-auto px-4 sm:px-6 py-10 sm:py-16">
       <div className="flex items-center justify-between mb-8 text-xs text-slate-500">
         <span className="font-mono">Connected as {userWallet}</span>
         <button

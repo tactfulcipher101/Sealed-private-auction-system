@@ -44,7 +44,7 @@ export function SettlementReveal({ listing, bids, isSeller, onRestart }: Settlem
           return (
             <div
               key={bid.commitmentHash}
-              className={"flex items-center justify-between px-4 py-3 text-xs font-mono " + (isWinner ? "bg-emerald-500/10" : "bg-slate-950/40")}
+              className={"flex flex-col items-start gap-2 px-4 py-3 text-xs font-mono sm:flex-row sm:items-center sm:justify-between " + (isWinner ? "bg-emerald-500/10" : "bg-slate-950/40")}
             >
               <div className="flex items-center gap-2 text-slate-300">
                 {bid.walletAddress}
@@ -55,7 +55,7 @@ export function SettlementReveal({ listing, bids, isSeller, onRestart }: Settlem
                 <motion.span
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  className={isWinner ? "text-emerald-400" : "text-slate-500"}
+                  className={"break-words " + (isWinner ? "text-emerald-400" : "text-slate-500")}
                 >
                   {formatCurrency(bid.amount, bid.currency)}
                   {!isWinner && (

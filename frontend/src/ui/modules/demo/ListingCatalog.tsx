@@ -28,7 +28,7 @@ export function ListingCatalog({ listings, onSelectListing, highlightId }: Listi
               key={listing.id}
               onClick={() => onSelectListing(listing)}
               className={
-                "w-full text-left p-5 rounded-lg bg-slate-900/60 border transition-all flex items-center gap-4 " +
+                "w-full text-left p-4 sm:p-5 rounded-lg bg-slate-900/60 border transition-all flex items-start sm:items-center gap-3 sm:gap-4 " +
                 (isNew ? "border-emerald-500/40" : "border-slate-800 hover:border-slate-700")
               }
             >
@@ -44,8 +44,8 @@ export function ListingCatalog({ listings, onSelectListing, highlightId }: Listi
                 </div>
               )}
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <p className="text-sm font-semibold text-slate-100 truncate">{listing.title}</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-sm font-semibold text-slate-100 break-words">{listing.title}</p>
                   {isNew && (
                     <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-1.5 py-0.5 rounded shrink-0">
                       <Sparkles className="h-2.5 w-2.5" /> just listed
@@ -54,7 +54,7 @@ export function ListingCatalog({ listings, onSelectListing, highlightId }: Listi
                 </div>
                 <p className="text-xs text-slate-500">{listing.region}</p>
               </div>
-              <div className="text-right shrink-0">
+              <div className="text-left sm:text-right shrink-0">
                 <p className="text-xs text-slate-500">Reserve</p>
                 <p className="text-sm font-mono text-slate-200">
                   {formatCurrency(listing.reservePrice, listing.currency)}

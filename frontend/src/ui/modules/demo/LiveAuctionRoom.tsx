@@ -80,14 +80,14 @@ export function LiveAuctionRoom({ listing, userBid, onAuctionClosed }: LiveAucti
               key={bid.commitmentHash}
               initial={{ opacity: 0, y: -8 }}
               animate={{ opacity: 1, y: 0 }}
-              className={"flex items-center justify-between px-4 py-3 text-xs font-mono " + (bid.isUser ? "bg-emerald-500/5" : "bg-slate-950/40")}
+              className={"flex flex-col items-start gap-2 px-4 py-3 text-xs font-mono sm:flex-row sm:items-center sm:justify-between " + (bid.isUser ? "bg-emerald-500/5" : "bg-slate-950/40")}
             >
               <div className="flex items-center gap-2 text-slate-300">
                 <Lock className="h-3.5 w-3.5 text-slate-600" />
                 {bid.walletAddress}
                 {bid.isUser && <span className="text-emerald-400">(you)</span>}
               </div>
-              <div className="text-slate-600 tracking-widest">HIDDEN UNTIL CLOSE</div>
+              <div className="text-[10px] text-slate-600 tracking-widest">HIDDEN UNTIL CLOSE</div>
             </motion.div>
           ))}
         </AnimatePresence>
