@@ -12,13 +12,13 @@ const MAX_SIMULATED_COMPETITORS = 19;
 
 interface LiveAuctionRoomProps {
   listing: Listing;
-  userBid: SimulatedBid;
+  userBid?: SimulatedBid | null;
   onAuctionClosed: (allBids: SimulatedBid[]) => void;
 }
 
 export function LiveAuctionRoom({ listing, userBid, onAuctionClosed }: LiveAuctionRoomProps) {
   const [secondsRemaining, setSecondsRemaining] = useState(AUCTION_DURATION_SECONDS);
-  const [bids, setBids] = useState<SimulatedBid[]>([userBid]);
+  const [bids, setBids] = useState<SimulatedBid[]>(userBid ? [userBid] : []);
 
   useEffect(() => {
     const span = MAX_SIMULATED_COMPETITORS - MIN_SIMULATED_COMPETITORS + 1;
@@ -94,8 +94,8 @@ export function LiveAuctionRoom({ listing, userBid, onAuctionClosed }: LiveAucti
       </div>
 
       <p className="text-[11px] text-slate-500">
-        Every commitment above is simulated for this demo and hidden from every other participant,
-        including you. Amounts unlock only when the auction closes.
+        Every commitment above is simulated for this demo and hidden from other participants,
+        including the seller. Amounts unlock only when the auction closes.
       </p>
     </div>
   );

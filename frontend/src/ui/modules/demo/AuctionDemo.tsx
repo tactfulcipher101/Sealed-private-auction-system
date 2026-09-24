@@ -59,6 +59,8 @@ export function AuctionDemo() {
     setStep("catalog");
   }
 
+  const isOwnListing = selectedListing?.sellerWalletAddress === userWallet;
+
   if (!userWallet) {
     return (
       <div className="max-w-2xl mx-auto px-6 py-16">
@@ -121,8 +123,8 @@ export function AuctionDemo() {
       {step === "listing" && selectedListing && (
         <ListingDetail
           listing={selectedListing}
-          isOwnListing={selectedListing.sellerWalletAddress === userWallet}
-          onEnterBidding={() => setStep("bidding")}
+          isOwnListing={isOwnListing}
+          onEnterBidding={() => setStep(isOwnListing ? "live" : "bidding")}
           onBack={() => setStep("catalog")}
         />
       )}
@@ -135,7 +137,7 @@ export function AuctionDemo() {
         />
       )}
 
-      {step === "live" && selectedListing && userBid && (
+      {step === "live" && selectedListing && (userBid || isOwnListing) && (
         <LiveAuctionRoom
           listing={selectedListing}
           userBid={userBid}
@@ -144,7 +146,12 @@ export function AuctionDemo() {
       )}
 
       {step === "settled" && selectedListing && (
-        <SettlementReveal listing={selectedListing} bids={finalBids} onRestart={handleRestart} />
+        <SettlementReveal
+          listing={selectedListing}
+          bids={finalBids}
+          isSeller={isOwnListing}
+          onRestart={handleRestart}
+        />
       )}
     </div>
   );

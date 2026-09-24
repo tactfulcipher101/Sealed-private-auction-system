@@ -70,11 +70,10 @@ export function ListingDetail({ listing, isOwnListing, onEnterBidding, onBack }:
 
       <button
         onClick={onEnterBidding}
-        disabled={isOwnListing}
-        className="w-full py-3 bg-slate-100 text-slate-950 text-sm font-medium rounded-lg hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+        className="w-full py-3 bg-slate-100 text-slate-950 text-sm font-medium rounded-lg hover:bg-white transition-all flex items-center justify-center gap-2"
       >
         <ShieldCheck className="h-4 w-4" />
-        <span>{isOwnListing ? "Bidding unavailable" : "Enter private bidding"}</span>
+        <span>{isOwnListing ? "Monitor auction" : "Enter private bidding"}</span>
       </button>
     </div>
   );
