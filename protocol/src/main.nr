@@ -6,9 +6,10 @@
 //! intermediaries, and the winning bidder's real-world identity is handed to the
 //! seller off-chain when closing requires it.
 //!
-//! TODO: forced late-reveal penalties, real-estate stakes/defaults, emergency
-//! multisig, and relayer authwits are intentionally deferred until this core
-//! vertical slice compiles and is integration-tested.
+//! TODO: real-estate stakes/defaults, emergency multisig, and relayer
+//! authwits are intentionally deferred until this core vertical slice
+//! compiles and is integration-tested. Forced late-reveal penalties are
+//! implemented below (see `claim_late_reveal`).
 
 mod bid_note;
 
@@ -34,6 +35,7 @@ pub contract SealedAuction {
     global STATUS_SETTLED: u8 = 3;
     global MAX_BIDS_PER_LISTING: u32 = 32;
     global SETTLEMENT_FEE_BPS: u128 = 300; // Placeholder: 3%, pending unit-economics review.
+    global LATE_REVEAL_PENALTY_BPS: u128 = 2000; // Placeholder: 20%, pending real economic decision.
     global BPS_DENOMINATOR: u128 = 10_000;
 
     #[derive(Eq, Packable)]
@@ -314,6 +316,39 @@ pub contract SealedAuction {
         );
     }
 
+    /// Recovery path for a bidder who never called `reveal_bid` before
+    /// `reveal_deadline`. Applies `LATE_REVEAL_PENALTY_BPS` to the locked
+    /// amount as the cost of withholding a reveal -- the remainder returns
+    /// to the bidder and the penalty is routed to treasury. Without this,
+    /// a bidder who suspects they lost has no reason to ever reveal, and
+    /// the reveal-at-close mechanism can stall with no winner determinable.
+    #[external("private")]
+    fn claim_late_reveal(listing_id: Field, amount: u128, salt: Field) {
+        let bidder = self.context.maybe_msg_sender().expect(
+            f"claim_late_reveal must be called through an account contract",
+        );
+        let listing = self.storage.listings.at(listing_id).read();
+        let now = self.context.get_anchor_block_header().timestamp();
+        assert(now > listing.reveal_deadline, "reveal deadline has not passed yet");
+
+        let note_key = note_key(bidder, listing_id);
+        let slot = self.storage.bid_notes.at(note_key).at(bidder);
+        let note = slot.get_note().get_note();
+        assert(!note.revealed, "bid was revealed on time; use the normal claim path");
+        assert(!note.settled, "bid already settled");
+        let expected_hash = crate::bid_note::bid_commitment_hash(amount, salt, bidder);
+        assert(expected_hash == note.commitment_hash, "claim does not match commitment");
+        assert(amount == note.locked_bid, "claimed amount differs from locked amount");
+
+        let penalty = amount * LATE_REVEAL_PENALTY_BPS / BPS_DENOMINATOR;
+        let refund = amount - penalty;
+        self.call(PrivateToken::at(listing.token).transfer(bidder, refund));
+        self.call(PrivateToken::at(listing.token).transfer(self.storage.treasury.read(), penalty));
+        slot.replace(|current| current.after_settlement()).deliver(
+            MessageDelivery::onchain_unconstrained(),
+        );
+    }
+
     #[only_self]
     #[external("public")]
     fn _record_commitment(listing_id: Field, commitment_hash: Field) {
@@ -419,3 +454,4 @@ pub contract SealedAuction {
         );
     }
 }
+
