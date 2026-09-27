@@ -158,3 +158,83 @@ unconstrained fn two_bidders_reveal_winner_and_settle_loser_refund() {
     );
     assert_eq(treasury_balance, BID_B * 300 / 10_000, "treasury receives the configured fee");
 }
+
+
+#[test]
+unconstrained fn late_reveal_forfeits_penalty_to_treasury() {
+    let mut env = TestEnvironment::new();
+    let seller = env.create_light_account();
+    let treasury = env.create_light_account();
+    let bidder = env.create_contract_account();
+
+    let listing_id: Field = 42;
+    let reserve: u128 = 100;
+    let bid_amount: u128 = 120;
+    let bidder_funds: u128 = 500;
+    let token_authwit_nonce: Field = 1;
+    let salt: Field = 0xdead;
+
+    let token = env.deploy("@private_token/PrivateToken").without_initializer();
+    let auction = env.deploy("@sealed_auction/SealedAuction").with_public_initializer(
+        seller,
+        SealedAuction::interface().constructor(treasury),
+    );
+
+    env.call_private(bidder, PrivateToken::at(token).faucet(bidder_funds));
+
+    let close_timestamp = env.last_block_timestamp() + 100;
+    let reveal_deadline = close_timestamp + 100;
+    env.call_public(
+        seller,
+        SealedAuction::at(auction).create_listing(
+            listing_id,
+            token,
+            reserve,
+            close_timestamp,
+            reveal_deadline,
+            true,
+        ),
+    );
+
+    add_private_authwit_from_call(
+        env,
+        bidder,
+        auction,
+        PrivateToken::at(token).transfer_in_private(bidder, auction, bid_amount, token_authwit_nonce),
+    );
+
+    env.call_private_opts(
+        bidder,
+        CallPrivateOptions::new().with_additional_scopes([auction, token]),
+        SealedAuction::at(auction).commit_bid(listing_id, bid_amount, salt, token_authwit_nonce),
+    );
+
+    // Advance past the reveal deadline without ever calling reveal_bid.
+    env.mine_block_at(reveal_deadline + 1);
+
+    env.call_private_opts(
+        bidder,
+        CallPrivateOptions::new().with_additional_scopes([auction, token]),
+        SealedAuction::at(auction).claim_late_reveal(listing_id, bid_amount, salt),
+    );
+
+    let bidder_balance = env.execute_utility_opts(
+        ExecuteUtilityOptions::new().with_from(bidder),
+        PrivateToken::at(token).balance_of_private(bidder),
+    );
+    let treasury_balance = env.execute_utility_opts(
+        ExecuteUtilityOptions::new().with_from(treasury),
+        PrivateToken::at(token).balance_of_private(treasury),
+    );
+
+    let penalty = bid_amount * 2000 / 10_000;
+    let refund = bid_amount - penalty;
+
+    assert_eq(
+        bidder_balance,
+        bidder_funds - bid_amount + refund,
+        "late-reveal claimant should recover their bid minus the penalty",
+    );
+    assert_eq(treasury_balance, penalty, "treasury should receive the forfeited penalty");
+    assert(refund < bid_amount, "late reveal must recover strictly less than the locked bid");
+}
