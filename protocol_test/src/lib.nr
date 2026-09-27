@@ -42,6 +42,9 @@ unconstrained fn two_bidders_reveal_winner_and_settle_loser_refund() {
             close_timestamp,
             reveal_deadline,
             true,
+            0, // category: mobile-goods
+            0, // stake_bps
+            0, // legal_closing_window
         ),
     );
 
@@ -193,6 +196,9 @@ unconstrained fn late_reveal_forfeits_penalty_to_treasury() {
             close_timestamp,
             reveal_deadline,
             true,
+            0, // category: mobile-goods
+            0, // stake_bps
+            0, // legal_closing_window
         ),
     );
 

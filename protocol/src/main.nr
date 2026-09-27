@@ -37,6 +37,8 @@ pub contract SealedAuction {
     global SETTLEMENT_FEE_BPS: u128 = 300; // Placeholder: 3%, pending unit-economics review.
     global LATE_REVEAL_PENALTY_BPS: u128 = 2000; // Placeholder: 20%, pending real economic decision.
     global BPS_DENOMINATOR: u128 = 10_000;
+    global CATEGORY_MOBILE_GOODS: u8 = 0;
+    global CATEGORY_REAL_ESTATE: u8 = 1;
 
     #[derive(Eq, Packable)]
     pub struct ListingInfo {
@@ -46,6 +48,15 @@ pub contract SealedAuction {
         pub close_timestamp: u64,
         pub reveal_deadline: u64,
         pub verified: bool,
+        /// 0 = mobile-goods, 1 = real-estate.
+        pub category: u8,
+        /// Commitment stake as basis points of the bid amount. Zero for
+        /// mobile-goods listings.
+        pub stake_bps: u16,
+        /// Seconds the winner has, after finalize_settlement, to confirm
+        /// legal closing before the stake becomes eligible for slashing.
+        /// Unused for mobile-goods listings.
+        pub legal_closing_window: u64,
     }
 
     #[derive(Deserialize, Eq, Packable, Serialize)]
@@ -82,6 +93,8 @@ pub contract SealedAuction {
         commitment_count: Map<Field, PublicMutable<u32, Context>, Context>,
         revealed_count: Map<Field, PublicMutable<u32, Context>, Context>,
         settlement: Map<Field, PublicMutable<SettlementRecord, Context>, Context>,
+        closing_confirmed: Map<Field, PublicMutable<bool, Context>, Context>,
+        legal_closing_deadline: Map<Field, PublicMutable<u64, Context>, Context>,
         bid_notes: Map<Field, Owned<PrivateMutable<BidCommitmentNote, Context>, Context>, Context>,
     }
 
@@ -100,6 +113,9 @@ pub contract SealedAuction {
         close_timestamp: u64,
         reveal_deadline: u64,
         verified_proof: bool,
+        category: u8,
+        stake_bps: u16,
+        legal_closing_window: u64,
     ) {
         let seller = self.context.maybe_msg_sender().expect(
             f"create_listing must be called through an account contract",
@@ -111,6 +127,16 @@ pub contract SealedAuction {
         assert(close_timestamp > self.context.timestamp(), "close time must be in the future");
         assert(reveal_deadline > close_timestamp, "reveal deadline must follow close time");
         assert(self.storage.status.at(listing_id).read() == 0, "listing id already used");
+        assert(
+            (category == CATEGORY_MOBILE_GOODS) | (category == CATEGORY_REAL_ESTATE),
+            "unknown listing category",
+        );
+        if category == CATEGORY_REAL_ESTATE {
+            assert(stake_bps > 0, "real-estate listings require a nonzero stake");
+            assert(legal_closing_window > 0, "real-estate listings require a legal closing window");
+        } else {
+            assert(stake_bps == 0, "mobile-goods listings cannot require a stake");
+        }
 
         self.storage.listings.at(listing_id).initialize(
             ListingInfo {
@@ -120,6 +146,9 @@ pub contract SealedAuction {
                 close_timestamp,
                 reveal_deadline,
                 verified: verified_proof,
+                category,
+                stake_bps,
+                legal_closing_window,
             },
         );
         self.storage.status.at(listing_id).write(STATUS_OPEN);
@@ -128,6 +157,8 @@ pub contract SealedAuction {
         self.storage.settlement.at(listing_id).write(
             SettlementRecord { winner_hash: 0, winning_amount: 0, has_winner: false },
         );
+        self.storage.closing_confirmed.at(listing_id).write(false);
+        self.storage.legal_closing_deadline.at(listing_id).write(0);
         self.emit(ListingCreated { listing_id, seller, token, reserve_price });
     }
 
@@ -146,16 +177,23 @@ pub contract SealedAuction {
         assert(amount >= listing.reserve_price, "bid is below reserve price");
         assert(now < listing.close_timestamp, "auction is closed");
 
+        // Real-estate listings require a commitment stake locked alongside
+        // the bid itself, sized as a fixed percentage of the bid amount.
+        // Mobile-goods listings have stake_bps == 0, so this is always zero
+        // for them.
+        let stake = amount * (listing.stake_bps as u128) / BPS_DENOMINATOR;
+        let total_locked = amount + stake;
+
         let commitment_hash = crate::bid_note::bid_commitment_hash(amount, salt, bidder);
         let enrollment_key = crate::bid_note::note_key(bidder, listing_id);
-        let note = BidCommitmentNote::new(listing_id, commitment_hash, amount);
+        let note = BidCommitmentNote::new(listing_id, commitment_hash, amount, stake);
         self.storage.bid_notes.at(enrollment_key).at(bidder).initialize(note).deliver(
             MessageDelivery::onchain_unconstrained(),
         );
         self.call(PrivateToken::at(listing.token).transfer_in_private(
             bidder,
             self.context.this_address(),
-            amount,
+            total_locked,
             token_authwit_nonce,
         ));
         self.enqueue_self._record_commitment(listing_id, commitment_hash);
@@ -189,7 +227,7 @@ pub contract SealedAuction {
         let slot = self.storage.bid_notes.at(enrollment_key).at(bidder);
         let note = slot.get_note().get_note();
         assert(!note.revealed, "bid already revealed");
-        assert(!note.settled, "bid already settled");
+        assert(!note.bid_settled, "bid already settled");
         let expected_hash = crate::bid_note::bid_commitment_hash(amount, salt, bidder);
         assert(expected_hash == note.commitment_hash, "reveal does not match commitment");
         assert(amount == note.locked_bid, "revealed amount differs from locked amount");
@@ -253,6 +291,11 @@ pub contract SealedAuction {
         self.storage.settlement.at(listing_id).write(
             SettlementRecord { winner_hash, winning_amount, has_winner },
         );
+        if has_winner & (listing.category == CATEGORY_REAL_ESTATE) {
+            self.storage.legal_closing_deadline.at(listing_id).write(
+                self.context.timestamp() + listing.legal_closing_window,
+            );
+        }
         self.storage.status.at(listing_id).write(STATUS_SETTLED);
     }
 
@@ -288,12 +331,16 @@ pub contract SealedAuction {
         let slot = self.storage.bid_notes.at(note_key).at(bidder);
         let note = slot.get_note().get_note();
         assert(note.revealed, "unrevealed bid is not claimable");
-        assert(!note.settled, "bid already claimed");
+        assert(!note.bid_settled, "bid already claimed");
         self.enqueue_self._mark_winner_claim(listing_id, note.commitment_hash);
         let fee = note.locked_bid * SETTLEMENT_FEE_BPS / BPS_DENOMINATOR;
         self.call(PrivateToken::at(listing.token).transfer(listing.seller, note.locked_bid - fee));
         self.call(PrivateToken::at(listing.token).transfer(self.storage.treasury.read(), fee));
-        slot.replace(|current| current.after_settlement()).deliver(
+        // The stake (if any) stays locked here; real-estate winners claim it
+        // separately via claim_stake_after_closing, once the seller confirms
+        // legal closing. Mobile-goods bids have no stake, so stake_resolved
+        // was already true from note creation and nothing further is owed.
+        slot.replace(|current| current.after_bid_settlement()).deliver(
             MessageDelivery::onchain_unconstrained(),
         );
     }
@@ -308,20 +355,25 @@ pub contract SealedAuction {
         let slot = self.storage.bid_notes.at(note_key).at(bidder);
         let note = slot.get_note().get_note();
         assert(note.revealed, "unrevealed bid is not claimable");
-        assert(!note.settled, "bid already claimed");
+        assert(!note.bid_settled, "bid already claimed");
         self.enqueue_self._mark_loser_claim(listing_id, note.commitment_hash);
-        self.call(PrivateToken::at(listing.token).transfer(bidder, note.locked_bid));
-        slot.replace(|current| current.after_settlement()).deliver(
+        // Losers recover the full locked amount, bid and stake together --
+        // there is no penalty for losing, only for withholding a reveal.
+        self.call(
+            PrivateToken::at(listing.token).transfer(bidder, note.locked_bid + note.locked_stake),
+        );
+        slot.replace(|current| current.after_full_settlement()).deliver(
             MessageDelivery::onchain_unconstrained(),
         );
     }
 
     /// Recovery path for a bidder who never called `reveal_bid` before
-    /// `reveal_deadline`. Applies `LATE_REVEAL_PENALTY_BPS` to the locked
-    /// amount as the cost of withholding a reveal -- the remainder returns
-    /// to the bidder and the penalty is routed to treasury. Without this,
-    /// a bidder who suspects they lost has no reason to ever reveal, and
-    /// the reveal-at-close mechanism can stall with no winner determinable.
+    /// `reveal_deadline`. Applies `LATE_REVEAL_PENALTY_BPS` to the full
+    /// locked amount (bid plus any real-estate stake) as the cost of
+    /// withholding a reveal -- the remainder returns to the bidder and the
+    /// penalty is routed to treasury. Without this, a bidder who suspects
+    /// they lost has no reason to ever reveal, and the reveal-at-close
+    /// mechanism can stall with no winner determinable.
     #[external("private")]
     fn claim_late_reveal(listing_id: Field, amount: u128, salt: Field) {
         let bidder = self.context.maybe_msg_sender().expect(
@@ -335,16 +387,70 @@ pub contract SealedAuction {
         let slot = self.storage.bid_notes.at(note_key).at(bidder);
         let note = slot.get_note().get_note();
         assert(!note.revealed, "bid was revealed on time; use the normal claim path");
-        assert(!note.settled, "bid already settled");
+        assert(!note.bid_settled, "bid already settled");
         let expected_hash = crate::bid_note::bid_commitment_hash(amount, salt, bidder);
         assert(expected_hash == note.commitment_hash, "claim does not match commitment");
         assert(amount == note.locked_bid, "claimed amount differs from locked amount");
 
-        let penalty = amount * LATE_REVEAL_PENALTY_BPS / BPS_DENOMINATOR;
-        let refund = amount - penalty;
+        let total_locked = note.locked_bid + note.locked_stake;
+        let penalty = total_locked * LATE_REVEAL_PENALTY_BPS / BPS_DENOMINATOR;
+        let refund = total_locked - penalty;
         self.call(PrivateToken::at(listing.token).transfer(bidder, refund));
         self.call(PrivateToken::at(listing.token).transfer(self.storage.treasury.read(), penalty));
-        slot.replace(|current| current.after_settlement()).deliver(
+        slot.replace(|current| current.after_full_settlement()).deliver(
+            MessageDelivery::onchain_unconstrained(),
+        );
+    }
+
+    /// Seller confirms off-chain legal closing has completed. Only unlocks
+    /// the winner's stake claim below -- it does not move any funds itself.
+    #[external("public")]
+    fn confirm_closing(listing_id: Field) {
+        let listing = self.storage.listings.at(listing_id).read();
+        let caller = self.context.maybe_msg_sender().expect(
+            f"confirm_closing must be called through an account contract",
+        );
+        assert(caller == listing.seller, "only the seller can confirm closing");
+        assert(
+            listing.category == CATEGORY_REAL_ESTATE,
+            "closing confirmation only applies to real-estate listings",
+        );
+        assert(
+            self.storage.status.at(listing_id).read() == STATUS_SETTLED,
+            "settlement is not finalized",
+        );
+        assert(!self.storage.closing_confirmed.at(listing_id).read(), "closing already confirmed");
+        self.storage.closing_confirmed.at(listing_id).write(true);
+    }
+
+    /// Returns the winning real-estate bidder's locked stake once the
+    /// seller has confirmed closing. Kept separate from claim_winning_bid
+    /// because the stake must stay locked past bid settlement.
+    ///
+    /// TODO (deferred, depends on Task 3 -- authwit relayer support):
+    /// there is intentionally no `slash_stake_for_default` here yet. In
+    /// Aztec's private-note model, only a note's own owner can nullify it
+    /// -- a third party cannot force a winner's private stake note to move
+    /// without that winner's cooperation or a pre-granted authwit. A
+    /// defaulting winner has no incentive to call a function that slashes
+    /// their own stake, so slashing genuinely requires the winner to grant
+    /// the contract a standing authwit at stake-posting time -- the same
+    /// primitive Task 3 introduces for relayers. Revisit once that lands.
+    #[external("private")]
+    fn claim_stake_after_closing(listing_id: Field) {
+        let bidder = self.context.maybe_msg_sender().expect(
+            f"claim_stake_after_closing must be called through an account contract",
+        );
+        let listing = self.storage.listings.at(listing_id).read();
+        self.enqueue_self._require_closing_confirmed(listing_id);
+        let note_key = note_key(bidder, listing_id);
+        let slot = self.storage.bid_notes.at(note_key).at(bidder);
+        let note = slot.get_note().get_note();
+        assert(note.bid_settled, "claim the bid portion before the stake");
+        assert(!note.stake_resolved, "stake already resolved");
+        assert(note.locked_stake > 0, "no stake locked for this bid");
+        self.call(PrivateToken::at(listing.token).transfer(bidder, note.locked_stake));
+        slot.replace(|current| current.after_stake_settlement()).deliver(
             MessageDelivery::onchain_unconstrained(),
         );
     }
@@ -418,6 +524,15 @@ pub contract SealedAuction {
     #[external("public")]
     fn _mark_loser_claim(listing_id: Field, commitment_hash: Field) {
         self.internal.mark_claim(listing_id, commitment_hash, false);
+    }
+
+    #[only_self]
+    #[external("public")]
+    fn _require_closing_confirmed(listing_id: Field) {
+        assert(
+            self.storage.closing_confirmed.at(listing_id).read(),
+            "closing has not been confirmed",
+        );
     }
 
     #[internal("public")]
