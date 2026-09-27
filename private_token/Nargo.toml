@@ -1,0 +1,8 @@
+[package]
+name = "private_token"
+type = "contract"
+authors = ["PrivateAuction"]
+
+[dependencies]
+aztec = { git = "https://github.com/AztecProtocol/aztec-nr", tag = "v5.2.0-nightly.20260815", directory = "aztec" }
+balance_set = { git = "https://github.com/AztecProtocol/aztec-nr", tag = "v5.2.0-nightly.20260815", directory = "balance-set" }

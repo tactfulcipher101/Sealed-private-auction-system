@@ -1,0 +1,2 @@
+[workspace]
+members = ["protocol", "private_token", "protocol_test"]
