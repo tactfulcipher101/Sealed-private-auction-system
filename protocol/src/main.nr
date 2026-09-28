@@ -535,6 +535,7 @@ pub contract SealedAuction {
         );
     }
 
+
     #[internal("public")]
     fn mark_claim(listing_id: Field, commitment_hash: Field, is_winner: bool) {
         assert(
