@@ -1,7 +1,0 @@
-Compilation complete!
-[protocol_test] Running 4 test functions
-[protocol_test] Testing late_reveal_forfeits_penalty_to_treasury ... [0m[32mok[0m
-[protocol_test] Testing real_estate_stake_claim_before_closing_confirmation_reverts ... [0m[32mok[0m
-[protocol_test] Testing two_bidders_reveal_winner_and_settle_loser_refund ... [0m[32mok[0m <40.146s>
-[protocol_test] Testing real_estate_winner_stake_returns_after_closing_and_loser_gets_bid_plus_stake ... [0m[32mok[0m <51.830s>
-[protocol_test] [0m[32m4 tests passed[0m
