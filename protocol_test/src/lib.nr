@@ -444,3 +444,73 @@ unconstrained fn real_estate_winner_stake_returns_after_closing_and_loser_gets_b
     );
     assert_eq(treasury_balance, settlement_fee, "treasury receives only the fee, never the stake");
 }
+
+
+#[test(should_fail)]
+unconstrained fn real_estate_stake_claim_before_closing_confirmation_reverts() {
+    let mut env = TestEnvironment::new();
+    let seller = env.create_light_account();
+    let treasury = env.create_light_account();
+    let bidder = env.create_contract_account();
+
+    let bid_amount: u128 = 300;
+    let stake_amount = bid_amount * (REAL_ESTATE_STAKE_BPS as u128) / 10_000;
+    let total_locked = bid_amount + stake_amount;
+    let token_authwit_nonce: Field = 1;
+    let salt: Field = 0xbeef3;
+
+    let token = env.deploy("@private_token/PrivateToken").without_initializer();
+    let auction = env.deploy("@sealed_auction/SealedAuction").with_public_initializer(
+        seller,
+        SealedAuction::interface().constructor(treasury),
+    );
+    env.call_private(bidder, PrivateToken::at(token).faucet(700));
+
+    let close_timestamp = env.last_block_timestamp() + 100;
+    let reveal_deadline = close_timestamp + 100;
+    env.call_public(
+        seller,
+        SealedAuction::at(auction).create_listing(
+            REAL_ESTATE_LISTING_ID,
+            token,
+            100,
+            close_timestamp,
+            reveal_deadline,
+            true,
+            1,
+            REAL_ESTATE_STAKE_BPS,
+            REAL_ESTATE_LEGAL_CLOSING_WINDOW,
+        ),
+    );
+    add_private_authwit_from_call(
+        env,
+        bidder,
+        auction,
+        PrivateToken::at(token).transfer_in_private(bidder, auction, total_locked, token_authwit_nonce),
+    );
+    env.call_private_opts(
+        bidder,
+        CallPrivateOptions::new().with_additional_scopes([auction, token]),
+        SealedAuction::at(auction).commit_bid(REAL_ESTATE_LISTING_ID, bid_amount, salt, token_authwit_nonce),
+    );
+    env.mine_block_at(close_timestamp + 1);
+    env.call_public(seller, SealedAuction::at(auction).close_auction(REAL_ESTATE_LISTING_ID));
+    env.call_private_opts(
+        bidder,
+        CallPrivateOptions::new().with_additional_scopes([auction]),
+        SealedAuction::at(auction).reveal_bid(REAL_ESTATE_LISTING_ID, bid_amount, salt),
+    );
+    env.call_public(seller, SealedAuction::at(auction).finalize_settlement(REAL_ESTATE_LISTING_ID));
+    env.call_private_opts(
+        bidder,
+        CallPrivateOptions::new().with_additional_scopes([auction, token]),
+        SealedAuction::at(auction).claim_winning_bid(REAL_ESTATE_LISTING_ID),
+    );
+
+    // No confirm_closing here. This last call must revert.
+    env.call_private_opts(
+        bidder,
+        CallPrivateOptions::new().with_additional_scopes([auction, token]),
+        SealedAuction::at(auction).claim_stake_after_closing(REAL_ESTATE_LISTING_ID),
+    );
+}
