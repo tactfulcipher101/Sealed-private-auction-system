@@ -244,3 +244,203 @@ unconstrained fn late_reveal_forfeits_penalty_to_treasury() {
     assert_eq(treasury_balance, penalty, "treasury should receive the forfeited penalty");
     assert(refund < bid_amount, "late reveal must recover strictly less than the locked bid");
 }
+
+
+global REAL_ESTATE_LISTING_ID: Field = 91;
+global REAL_ESTATE_STAKE_BPS: u16 = 1000; // 10% of the bid amount
+global REAL_ESTATE_LEGAL_CLOSING_WINDOW: u64 = 1000;
+
+#[test]
+unconstrained fn real_estate_winner_stake_returns_after_closing_and_loser_gets_bid_plus_stake() {
+    let mut env = TestEnvironment::new();
+    let seller = env.create_light_account();
+    let treasury = env.create_light_account();
+    let losing_bidder = env.create_contract_account();
+    let winning_bidder = env.create_contract_account();
+
+    let reserve_price: u128 = 100;
+    let losing_bid: u128 = 200;
+    let winning_bid: u128 = 300;
+    let losing_bidder_funds: u128 = 500;
+    let winning_bidder_funds: u128 = 700;
+    let token_authwit_nonce: Field = 1;
+    let losing_salt: Field = 0xbeef1;
+    let winning_salt: Field = 0xbeef2;
+
+    // Same integer math as commit_bid in the contract.
+    let losing_stake = losing_bid * (REAL_ESTATE_STAKE_BPS as u128) / 10_000;
+    let winning_stake = winning_bid * (REAL_ESTATE_STAKE_BPS as u128) / 10_000;
+    let losing_total_locked = losing_bid + losing_stake;
+    let winning_total_locked = winning_bid + winning_stake;
+    let settlement_fee = winning_bid * 300 / 10_000;
+
+    let token = env.deploy("@private_token/PrivateToken").without_initializer();
+    let auction = env.deploy("@sealed_auction/SealedAuction").with_public_initializer(
+        seller,
+        SealedAuction::interface().constructor(treasury),
+    );
+
+    env.call_private(losing_bidder, PrivateToken::at(token).faucet(losing_bidder_funds));
+    env.call_private(winning_bidder, PrivateToken::at(token).faucet(winning_bidder_funds));
+
+    let close_timestamp = env.last_block_timestamp() + 100;
+    let reveal_deadline = close_timestamp + 100;
+    env.call_public(
+        seller,
+        SealedAuction::at(auction).create_listing(
+            REAL_ESTATE_LISTING_ID,
+            token,
+            reserve_price,
+            close_timestamp,
+            reveal_deadline,
+            true,
+            1, // category: real-estate
+            REAL_ESTATE_STAKE_BPS,
+            REAL_ESTATE_LEGAL_CLOSING_WINDOW,
+        ),
+    );
+
+    // The token pull must cover bid AND stake, since commit_bid locks both.
+    add_private_authwit_from_call(
+        env,
+        losing_bidder,
+        auction,
+        PrivateToken::at(token).transfer_in_private(
+            losing_bidder,
+            auction,
+            losing_total_locked,
+            token_authwit_nonce,
+        ),
+    );
+    add_private_authwit_from_call(
+        env,
+        winning_bidder,
+        auction,
+        PrivateToken::at(token).transfer_in_private(
+            winning_bidder,
+            auction,
+            winning_total_locked,
+            token_authwit_nonce,
+        ),
+    );
+
+    env.call_private_opts(
+        losing_bidder,
+        CallPrivateOptions::new().with_additional_scopes([auction, token]),
+        SealedAuction::at(auction).commit_bid(
+            REAL_ESTATE_LISTING_ID,
+            losing_bid,
+            losing_salt,
+            token_authwit_nonce,
+        ),
+    );
+    env.call_private_opts(
+        winning_bidder,
+        CallPrivateOptions::new().with_additional_scopes([auction, token]),
+        SealedAuction::at(auction).commit_bid(
+            REAL_ESTATE_LISTING_ID,
+            winning_bid,
+            winning_salt,
+            token_authwit_nonce,
+        ),
+    );
+
+    let losing_balance_after_commit = env.execute_utility_opts(
+        ExecuteUtilityOptions::new().with_from(losing_bidder),
+        PrivateToken::at(token).balance_of_private(losing_bidder),
+    );
+    let winning_balance_after_commit = env.execute_utility_opts(
+        ExecuteUtilityOptions::new().with_from(winning_bidder),
+        PrivateToken::at(token).balance_of_private(winning_bidder),
+    );
+    assert_eq(
+        losing_balance_after_commit,
+        losing_bidder_funds - losing_total_locked,
+        "commit should lock the loser's bid plus stake",
+    );
+    assert_eq(
+        winning_balance_after_commit,
+        winning_bidder_funds - winning_total_locked,
+        "commit should lock the winner's bid plus stake",
+    );
+
+    env.mine_block_at(close_timestamp + 1);
+    env.call_public(seller, SealedAuction::at(auction).close_auction(REAL_ESTATE_LISTING_ID));
+
+    env.call_private_opts(
+        losing_bidder,
+        CallPrivateOptions::new().with_additional_scopes([auction]),
+        SealedAuction::at(auction).reveal_bid(REAL_ESTATE_LISTING_ID, losing_bid, losing_salt),
+    );
+    env.call_private_opts(
+        winning_bidder,
+        CallPrivateOptions::new().with_additional_scopes([auction]),
+        SealedAuction::at(auction).reveal_bid(REAL_ESTATE_LISTING_ID, winning_bid, winning_salt),
+    );
+
+    env.call_public(seller, SealedAuction::at(auction).finalize_settlement(REAL_ESTATE_LISTING_ID));
+
+    // Loser recovers bid and stake together, no penalty for simply losing.
+    env.call_private_opts(
+        losing_bidder,
+        CallPrivateOptions::new().with_additional_scopes([auction, token]),
+        SealedAuction::at(auction).claim_losing_bid(REAL_ESTATE_LISTING_ID),
+    );
+    // Winner's bid is paid out, but the stake must stay locked.
+    env.call_private_opts(
+        winning_bidder,
+        CallPrivateOptions::new().with_additional_scopes([auction, token]),
+        SealedAuction::at(auction).claim_winning_bid(REAL_ESTATE_LISTING_ID),
+    );
+
+    let losing_balance_after_claims = env.execute_utility_opts(
+        ExecuteUtilityOptions::new().with_from(losing_bidder),
+        PrivateToken::at(token).balance_of_private(losing_bidder),
+    );
+    let winning_balance_before_closing = env.execute_utility_opts(
+        ExecuteUtilityOptions::new().with_from(winning_bidder),
+        PrivateToken::at(token).balance_of_private(winning_bidder),
+    );
+    assert_eq(
+        losing_balance_after_claims,
+        losing_bidder_funds,
+        "loser should get back the full bid plus stake",
+    );
+    assert_eq(
+        winning_balance_before_closing,
+        winning_bidder_funds - winning_total_locked,
+        "winner's stake must stay locked until closing is confirmed",
+    );
+
+    // Seller confirms off-chain legal closing, which unlocks the stake claim.
+    env.call_public(seller, SealedAuction::at(auction).confirm_closing(REAL_ESTATE_LISTING_ID));
+    env.call_private_opts(
+        winning_bidder,
+        CallPrivateOptions::new().with_additional_scopes([auction, token]),
+        SealedAuction::at(auction).claim_stake_after_closing(REAL_ESTATE_LISTING_ID),
+    );
+
+    let winning_balance_after_stake = env.execute_utility_opts(
+        ExecuteUtilityOptions::new().with_from(winning_bidder),
+        PrivateToken::at(token).balance_of_private(winning_bidder),
+    );
+    let seller_balance = env.execute_utility_opts(
+        ExecuteUtilityOptions::new().with_from(seller),
+        PrivateToken::at(token).balance_of_private(seller),
+    );
+    let treasury_balance = env.execute_utility_opts(
+        ExecuteUtilityOptions::new().with_from(treasury),
+        PrivateToken::at(token).balance_of_private(treasury),
+    );
+    assert_eq(
+        winning_balance_after_stake,
+        winning_bidder_funds - winning_bid,
+        "winner should be out only the winning bid once the stake returns",
+    );
+    assert_eq(
+        seller_balance,
+        winning_bid - settlement_fee,
+        "seller receives the winning bid less fee",
+    );
+    assert_eq(treasury_balance, settlement_fee, "treasury receives only the fee, never the stake");
+}
