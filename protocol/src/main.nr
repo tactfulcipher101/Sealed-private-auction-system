@@ -6,10 +6,7 @@
 //! intermediaries, and the winning bidder's real-world identity is handed to the
 //! seller off-chain when closing requires it.
 //!
-//! TODO: real-estate stakes/defaults, emergency multisig, and relayer
-//! authwits are intentionally deferred until this core vertical slice
-//! compiles and is integration-tested. Forced late-reveal penalties are
-//! implemented below (see `claim_late_reveal`).
+//! TODO: emergency multisig pause is intentionally deferred.
 
 mod bid_note;
 
@@ -39,6 +36,9 @@ pub contract SealedAuction {
     global BPS_DENOMINATOR: u128 = 10_000;
     global CATEGORY_MOBILE_GOODS: u8 = 0;
     global CATEGORY_REAL_ESTATE: u8 = 1;
+    // Share of a slashed real-estate stake paid to the seller; the remainder
+    // goes to treasury. 10_000 = 100% to the seller.
+    global SLASH_SELLER_SHARE_BPS: u128 = 10_000;
 
     #[derive(Eq, Packable)]
     pub struct ListingInfo {
@@ -95,6 +95,8 @@ pub contract SealedAuction {
         settlement: Map<Field, PublicMutable<SettlementRecord, Context>, Context>,
         closing_confirmed: Map<Field, PublicMutable<bool, Context>, Context>,
         legal_closing_deadline: Map<Field, PublicMutable<u64, Context>, Context>,
+        // True once the winner's stake has left the auction (returned or slashed).
+        stake_claimed: Map<Field, PublicMutable<bool, Context>, Context>,
         bid_notes: Map<Field, Owned<PrivateMutable<BidCommitmentNote, Context>, Context>, Context>,
     }
 
@@ -453,17 +455,53 @@ pub contract SealedAuction {
             f"claim_stake_after_closing must be called through an account contract",
         );
         let listing = self.storage.listings.at(listing_id).read();
-        self.enqueue_self._require_closing_confirmed(listing_id);
         let note_key = note_key(bidder, listing_id);
         let slot = self.storage.bid_notes.at(note_key).at(bidder);
         let note = slot.get_note().get_note();
-        assert(note.bid_settled, "claim the bid portion before the stake");
         assert(!note.stake_resolved, "stake already resolved");
         assert(note.locked_stake > 0, "no stake locked for this bid");
+        // Public gate: winner record paid out, closing confirmed, stake not yet
+        // claimed or slashed. Independent of the note's bid_settled flag, which
+        // stays false when the bid was paid through settle_winning_bid.
+        self.enqueue_self._mark_stake_release(listing_id, note.commitment_hash);
         self.call(PrivateToken::at(listing.token).transfer(bidder, note.locked_stake));
         slot.replace(|current| current.after_stake_settlement()).deliver(
             MessageDelivery::onchain_unconstrained(),
         );
+    }
+
+    /// Anyone may pay out the winning bid. The caller supplies winning_amount,
+    /// so the public gate re-verifies it against the settled result and marks
+    /// the winner's record claimed through the same flag claim_winning_bid uses.
+    #[external("private")]
+    fn settle_winning_bid(listing_id: Field, winning_amount: u128) {
+        let listing = self.storage.listings.at(listing_id).read();
+        self.enqueue_self._mark_settle_winner(listing_id, winning_amount);
+        let fee = winning_amount * SETTLEMENT_FEE_BPS / BPS_DENOMINATOR;
+        self.call(PrivateToken::at(listing.token).transfer(listing.seller, winning_amount - fee));
+        self.call(PrivateToken::at(listing.token).transfer(self.storage.treasury.read(), fee));
+    }
+
+    /// Anyone may slash a real-estate winner who missed the legal closing
+    /// deadline. The public gate re-verifies winning_amount, the deadline and
+    /// that closing was never confirmed.
+    #[external("private")]
+    fn slash_stake_for_default(listing_id: Field, winning_amount: u128) {
+        let listing = self.storage.listings.at(listing_id).read();
+        assert(listing.category == CATEGORY_REAL_ESTATE, "only real-estate stakes can be slashed");
+        let stake = winning_amount * (listing.stake_bps as u128) / BPS_DENOMINATOR;
+        assert(stake > 0, "no stake locked for this listing");
+        self.enqueue_self._mark_slash(listing_id, winning_amount);
+        let seller_share = stake * SLASH_SELLER_SHARE_BPS / BPS_DENOMINATOR;
+        self.call(PrivateToken::at(listing.token).transfer(listing.seller, seller_share));
+        if SLASH_SELLER_SHARE_BPS < BPS_DENOMINATOR {
+            self.call(
+                PrivateToken::at(listing.token).transfer(
+                    self.storage.treasury.read(),
+                    stake - seller_share,
+                ),
+            );
+        }
     }
 
     #[only_self]
@@ -575,11 +613,79 @@ pub contract SealedAuction {
 
     #[only_self]
     #[external("public")]
-    fn _require_closing_confirmed(listing_id: Field) {
+    fn _mark_settle_winner(listing_id: Field, winning_amount: u128) {
+        let settlement = self.storage.settlement.at(listing_id).read();
+        assert(settlement.has_winner, "listing has no winner");
+        assert(
+            winning_amount == settlement.winning_amount,
+            "amount differs from the settled winning bid",
+        );
+        self.internal.mark_claim(listing_id, settlement.winner_hash, true);
+    }
+
+    #[only_self]
+    #[external("public")]
+    fn _mark_stake_release(listing_id: Field, commitment_hash: Field) {
         assert(
             self.storage.closing_confirmed.at(listing_id).read(),
             "closing has not been confirmed",
         );
+        assert(!self.storage.stake_claimed.at(listing_id).read(), "stake already claimed");
+        let count = self.storage.commitment_count.at(listing_id).read();
+        let mut index = 0;
+        let mut found = false;
+        for i in 0..MAX_BIDS_PER_LISTING {
+            if i < count {
+                let bid_record = self.storage.commitments.at(listing_id).at(i).read();
+                if bid_record.commitment_hash == commitment_hash {
+                    index = i;
+                    found = true;
+                }
+            }
+        }
+        assert(found, "commitment not found");
+        let bid_record = self.storage.commitments.at(listing_id).at(index).read();
+        assert(bid_record.is_winner & bid_record.claimed, "only a paid-out winner can claim the stake");
+        self.storage.stake_claimed.at(listing_id).write(true);
+    }
+
+    #[only_self]
+    #[external("public")]
+    fn _mark_slash(listing_id: Field, winning_amount: u128) {
+        let listing = self.storage.listings.at(listing_id).read();
+        assert(listing.category == CATEGORY_REAL_ESTATE, "only real-estate stakes can be slashed");
+        assert(
+            self.storage.status.at(listing_id).read() == STATUS_SETTLED,
+            "settlement is not finalized",
+        );
+        let settlement = self.storage.settlement.at(listing_id).read();
+        assert(settlement.has_winner, "listing has no winner");
+        assert(
+            winning_amount == settlement.winning_amount,
+            "amount differs from the settled winning bid",
+        );
+        let count = self.storage.commitment_count.at(listing_id).read();
+        let mut index = 0;
+        let mut found = false;
+        for i in 0..MAX_BIDS_PER_LISTING {
+            if i < count {
+                let bid_record = self.storage.commitments.at(listing_id).at(i).read();
+                if bid_record.commitment_hash == settlement.winner_hash {
+                    index = i;
+                    found = true;
+                }
+            }
+        }
+        assert(found, "winner commitment not found");
+        let winner_record = self.storage.commitments.at(listing_id).at(index).read();
+        assert(winner_record.is_winner & winner_record.claimed, "winning bid has not been paid out");
+        assert(
+            self.context.timestamp() > self.storage.legal_closing_deadline.at(listing_id).read(),
+            "legal closing deadline has not passed",
+        );
+        assert(!self.storage.closing_confirmed.at(listing_id).read(), "closing was confirmed");
+        assert(!self.storage.stake_claimed.at(listing_id).read(), "stake already claimed");
+        self.storage.stake_claimed.at(listing_id).write(true);
     }
 
 
