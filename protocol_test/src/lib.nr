@@ -514,3 +514,364 @@ unconstrained fn real_estate_stake_claim_before_closing_confirmation_reverts() {
         SealedAuction::at(auction).claim_stake_after_closing(REAL_ESTATE_LISTING_ID),
     );
 }
+
+
+#[test]
+unconstrained fn relayer_reveals_for_both_bidders_then_normal_claims() {
+    let mut env = TestEnvironment::new();
+    let seller = env.create_light_account();
+    let treasury = env.create_light_account();
+    let relayer = env.create_light_account();
+    let bidder_a = env.create_contract_account();
+    let bidder_b = env.create_contract_account();
+
+    let token = env.deploy("@private_token/PrivateToken").without_initializer();
+    let auction = env.deploy("@sealed_auction/SealedAuction").with_public_initializer(
+        seller,
+        SealedAuction::interface().constructor(treasury),
+    );
+
+    env.call_private(bidder_a, PrivateToken::at(token).faucet(BIDDER_A_FUNDS));
+    env.call_private(bidder_b, PrivateToken::at(token).faucet(BIDDER_B_FUNDS));
+
+    let close_timestamp = env.last_block_timestamp() + 100;
+    let reveal_deadline = close_timestamp + 100;
+    env.call_public(
+        seller,
+        SealedAuction::at(auction).create_listing(
+            LISTING_ID,
+            token,
+            RESERVE,
+            close_timestamp,
+            reveal_deadline,
+            true,
+            0,
+            0,
+            0,
+        ),
+    );
+
+    add_private_authwit_from_call(
+        env,
+        bidder_a,
+        auction,
+        PrivateToken::at(token).transfer_in_private(bidder_a, auction, BID_A, TOKEN_AUTHWIT_NONCE),
+    );
+    add_private_authwit_from_call(
+        env,
+        bidder_b,
+        auction,
+        PrivateToken::at(token).transfer_in_private(bidder_b, auction, BID_B, TOKEN_AUTHWIT_NONCE),
+    );
+    env.call_private_opts(
+        bidder_a,
+        CallPrivateOptions::new().with_additional_scopes([auction, token]),
+        SealedAuction::at(auction).commit_bid(LISTING_ID, BID_A, 0xabc1, TOKEN_AUTHWIT_NONCE),
+    );
+    env.call_private_opts(
+        bidder_b,
+        CallPrivateOptions::new().with_additional_scopes([auction, token]),
+        SealedAuction::at(auction).commit_bid(LISTING_ID, BID_B, 0xabc2, TOKEN_AUTHWIT_NONCE),
+    );
+
+    env.mine_block_at(close_timestamp + 1);
+    env.call_public(seller, SealedAuction::at(auction).close_auction(LISTING_ID));
+
+    // A third account, holding only the preimages, reveals for both bidders.
+    env.call_private_opts(
+        relayer,
+        CallPrivateOptions::new().with_additional_scopes([auction]),
+        SealedAuction::at(auction).reveal_bid_for(LISTING_ID, BID_A, 0xabc1, bidder_a),
+    );
+    env.call_private_opts(
+        relayer,
+        CallPrivateOptions::new().with_additional_scopes([auction]),
+        SealedAuction::at(auction).reveal_bid_for(LISTING_ID, BID_B, 0xabc2, bidder_b),
+    );
+
+    let revealed_a =
+        env.call_public(seller, SealedAuction::at(auction).get_commitment(LISTING_ID, 0));
+    let revealed_b =
+        env.call_public(seller, SealedAuction::at(auction).get_commitment(LISTING_ID, 1));
+    assert(revealed_a.revealed, "relayer reveal should mark the first record revealed");
+    assert(revealed_b.revealed, "relayer reveal should mark the second record revealed");
+    assert_eq(revealed_a.amount, BID_A);
+    assert_eq(revealed_b.amount, BID_B);
+
+    env.call_public(seller, SealedAuction::at(auction).finalize_settlement(LISTING_ID));
+    let settlement = env.call_public(seller, SealedAuction::at(auction).get_settlement(LISTING_ID));
+    assert(settlement.has_winner, "an eligible revealed bid should win");
+    assert_eq(settlement.winning_amount, BID_B);
+    assert_eq(settlement.winner_hash, poseidon2_hash([BID_B as Field, 0xabc2, bidder_b.to_field()]));
+
+    // The bidders' notes still say unrevealed; the normal claims must still work.
+    env.call_private_opts(
+        bidder_a,
+        CallPrivateOptions::new().with_additional_scopes([auction, token]),
+        SealedAuction::at(auction).claim_losing_bid(LISTING_ID),
+    );
+    env.call_private_opts(
+        bidder_b,
+        CallPrivateOptions::new().with_additional_scopes([auction, token]),
+        SealedAuction::at(auction).claim_winning_bid(LISTING_ID),
+    );
+
+    let bidder_a_balance = env.execute_utility_opts(
+        ExecuteUtilityOptions::new().with_from(bidder_a),
+        PrivateToken::at(token).balance_of_private(bidder_a),
+    );
+    let bidder_b_balance = env.execute_utility_opts(
+        ExecuteUtilityOptions::new().with_from(bidder_b),
+        PrivateToken::at(token).balance_of_private(bidder_b),
+    );
+    let seller_balance = env.execute_utility_opts(
+        ExecuteUtilityOptions::new().with_from(seller),
+        PrivateToken::at(token).balance_of_private(seller),
+    );
+    let treasury_balance = env.execute_utility_opts(
+        ExecuteUtilityOptions::new().with_from(treasury),
+        PrivateToken::at(token).balance_of_private(treasury),
+    );
+    assert_eq(bidder_a_balance, BIDDER_A_FUNDS, "loser should get the full bid back");
+    assert_eq(bidder_b_balance, BIDDER_B_FUNDS - BID_B, "winner's bid should be paid out");
+    assert_eq(seller_balance, BID_B - (BID_B * 300 / 10_000), "seller receives bid less fee");
+    assert_eq(treasury_balance, BID_B * 300 / 10_000, "treasury receives the fee");
+}
+
+
+#[test(should_fail)]
+unconstrained fn reveal_bid_for_wrong_salt_reverts() {
+    let mut env = TestEnvironment::new();
+    let seller = env.create_light_account();
+    let treasury = env.create_light_account();
+    let relayer = env.create_light_account();
+    let bidder = env.create_contract_account();
+
+    let bid_amount: u128 = BID_A;
+    let salt: Field = 0x5a17;
+
+    let token = env.deploy("@private_token/PrivateToken").without_initializer();
+    let auction = env.deploy("@sealed_auction/SealedAuction").with_public_initializer(
+        seller,
+        SealedAuction::interface().constructor(treasury),
+    );
+    env.call_private(bidder, PrivateToken::at(token).faucet(BIDDER_A_FUNDS));
+
+    let close_timestamp = env.last_block_timestamp() + 100;
+    let reveal_deadline = close_timestamp + 100;
+    env.call_public(
+        seller,
+        SealedAuction::at(auction).create_listing(
+            LISTING_ID,
+            token,
+            RESERVE,
+            close_timestamp,
+            reveal_deadline,
+            true,
+            0,
+            0,
+            0,
+        ),
+    );
+    add_private_authwit_from_call(
+        env,
+        bidder,
+        auction,
+        PrivateToken::at(token).transfer_in_private(bidder, auction, bid_amount, TOKEN_AUTHWIT_NONCE),
+    );
+    env.call_private_opts(
+        bidder,
+        CallPrivateOptions::new().with_additional_scopes([auction, token]),
+        SealedAuction::at(auction).commit_bid(LISTING_ID, bid_amount, salt, TOKEN_AUTHWIT_NONCE),
+    );
+    env.mine_block_at(close_timestamp + 1);
+    env.call_public(seller, SealedAuction::at(auction).close_auction(LISTING_ID));
+
+    // No other call is illegal. This last call must revert on the salt alone.
+    let submitted_salt: Field = salt + 1;
+    env.call_private_opts(
+        relayer,
+        CallPrivateOptions::new().with_additional_scopes([auction]),
+        SealedAuction::at(auction).reveal_bid_for(LISTING_ID, bid_amount, submitted_salt, bidder),
+    );
+}
+
+
+#[test(should_fail)]
+unconstrained fn reveal_bid_for_wrong_amount_reverts() {
+    let mut env = TestEnvironment::new();
+    let seller = env.create_light_account();
+    let treasury = env.create_light_account();
+    let relayer = env.create_light_account();
+    let bidder = env.create_contract_account();
+
+    let bid_amount: u128 = BID_A;
+    let salt: Field = 0x5a18;
+
+    let token = env.deploy("@private_token/PrivateToken").without_initializer();
+    let auction = env.deploy("@sealed_auction/SealedAuction").with_public_initializer(
+        seller,
+        SealedAuction::interface().constructor(treasury),
+    );
+    env.call_private(bidder, PrivateToken::at(token).faucet(BIDDER_A_FUNDS));
+
+    let close_timestamp = env.last_block_timestamp() + 100;
+    let reveal_deadline = close_timestamp + 100;
+    env.call_public(
+        seller,
+        SealedAuction::at(auction).create_listing(
+            LISTING_ID,
+            token,
+            RESERVE,
+            close_timestamp,
+            reveal_deadline,
+            true,
+            0,
+            0,
+            0,
+        ),
+    );
+    add_private_authwit_from_call(
+        env,
+        bidder,
+        auction,
+        PrivateToken::at(token).transfer_in_private(bidder, auction, bid_amount, TOKEN_AUTHWIT_NONCE),
+    );
+    env.call_private_opts(
+        bidder,
+        CallPrivateOptions::new().with_additional_scopes([auction, token]),
+        SealedAuction::at(auction).commit_bid(LISTING_ID, bid_amount, salt, TOKEN_AUTHWIT_NONCE),
+    );
+    env.mine_block_at(close_timestamp + 1);
+    env.call_public(seller, SealedAuction::at(auction).close_auction(LISTING_ID));
+
+    let submitted_amount: u128 = bid_amount + 1;
+    env.call_private_opts(
+        relayer,
+        CallPrivateOptions::new().with_additional_scopes([auction]),
+        SealedAuction::at(auction).reveal_bid_for(LISTING_ID, submitted_amount, salt, bidder),
+    );
+}
+
+
+#[test(should_fail)]
+unconstrained fn reveal_bid_for_wrong_bidder_reverts() {
+    let mut env = TestEnvironment::new();
+    let seller = env.create_light_account();
+    let treasury = env.create_light_account();
+    let relayer = env.create_light_account();
+    let wrong_bidder = env.create_light_account();
+    let bidder = env.create_contract_account();
+
+    let bid_amount: u128 = BID_A;
+    let salt: Field = 0x5a19;
+
+    let token = env.deploy("@private_token/PrivateToken").without_initializer();
+    let auction = env.deploy("@sealed_auction/SealedAuction").with_public_initializer(
+        seller,
+        SealedAuction::interface().constructor(treasury),
+    );
+    env.call_private(bidder, PrivateToken::at(token).faucet(BIDDER_A_FUNDS));
+
+    let close_timestamp = env.last_block_timestamp() + 100;
+    let reveal_deadline = close_timestamp + 100;
+    env.call_public(
+        seller,
+        SealedAuction::at(auction).create_listing(
+            LISTING_ID,
+            token,
+            RESERVE,
+            close_timestamp,
+            reveal_deadline,
+            true,
+            0,
+            0,
+            0,
+        ),
+    );
+    add_private_authwit_from_call(
+        env,
+        bidder,
+        auction,
+        PrivateToken::at(token).transfer_in_private(bidder, auction, bid_amount, TOKEN_AUTHWIT_NONCE),
+    );
+    env.call_private_opts(
+        bidder,
+        CallPrivateOptions::new().with_additional_scopes([auction, token]),
+        SealedAuction::at(auction).commit_bid(LISTING_ID, bid_amount, salt, TOKEN_AUTHWIT_NONCE),
+    );
+    env.mine_block_at(close_timestamp + 1);
+    env.call_public(seller, SealedAuction::at(auction).close_auction(LISTING_ID));
+
+    let submitted_bidder = wrong_bidder;
+    env.call_private_opts(
+        relayer,
+        CallPrivateOptions::new().with_additional_scopes([auction]),
+        SealedAuction::at(auction).reveal_bid_for(LISTING_ID, bid_amount, salt, submitted_bidder),
+    );
+}
+
+
+#[test(should_fail)]
+unconstrained fn late_reveal_claim_after_relayer_reveal_reverts() {
+    let mut env = TestEnvironment::new();
+    let seller = env.create_light_account();
+    let treasury = env.create_light_account();
+    let relayer = env.create_light_account();
+    let bidder = env.create_contract_account();
+
+    let bid_amount: u128 = BID_A;
+    let salt: Field = 0x5a20;
+
+    let token = env.deploy("@private_token/PrivateToken").without_initializer();
+    let auction = env.deploy("@sealed_auction/SealedAuction").with_public_initializer(
+        seller,
+        SealedAuction::interface().constructor(treasury),
+    );
+    env.call_private(bidder, PrivateToken::at(token).faucet(BIDDER_A_FUNDS));
+
+    let close_timestamp = env.last_block_timestamp() + 100;
+    let reveal_deadline = close_timestamp + 100;
+    env.call_public(
+        seller,
+        SealedAuction::at(auction).create_listing(
+            LISTING_ID,
+            token,
+            RESERVE,
+            close_timestamp,
+            reveal_deadline,
+            true,
+            0,
+            0,
+            0,
+        ),
+    );
+    add_private_authwit_from_call(
+        env,
+        bidder,
+        auction,
+        PrivateToken::at(token).transfer_in_private(bidder, auction, bid_amount, TOKEN_AUTHWIT_NONCE),
+    );
+    env.call_private_opts(
+        bidder,
+        CallPrivateOptions::new().with_additional_scopes([auction, token]),
+        SealedAuction::at(auction).commit_bid(LISTING_ID, bid_amount, salt, TOKEN_AUTHWIT_NONCE),
+    );
+    env.mine_block_at(close_timestamp + 1);
+    env.call_public(seller, SealedAuction::at(auction).close_auction(LISTING_ID));
+
+    // Relayer reveals on time, so the bidder's note still says unrevealed.
+    env.call_private_opts(
+        relayer,
+        CallPrivateOptions::new().with_additional_scopes([auction]),
+        SealedAuction::at(auction).reveal_bid_for(LISTING_ID, bid_amount, salt, bidder),
+    );
+
+    // After the deadline the bidder must NOT be able to take the penalty path.
+    env.mine_block_at(reveal_deadline + 1);
+    env.call_private_opts(
+        bidder,
+        CallPrivateOptions::new().with_additional_scopes([auction, token]),
+        SealedAuction::at(auction).claim_late_reveal(LISTING_ID, bid_amount, salt),
+    );
+}

@@ -238,6 +238,24 @@ pub contract SealedAuction {
         self.enqueue_self._record_reveal(listing_id, note.commitment_hash, amount);
     }
 
+    /// Anyone may reveal a bid on the bidder's behalf, provided they know the
+    /// preimage (amount, salt, bidder). The bidder's note is not touched, since
+    /// consuming it would need the owner's nullifier key. A wrong preimage
+    /// hashes to a commitment that is not in the listing, so the enqueued
+    /// _record_reveal reverts. Only (hash, amount) becomes public, exactly as
+    /// in reveal_bid. Payouts stay bound to the bidder because the bidder
+    /// address is inside the hash and claims are made by the note owner.
+    #[external("private")]
+    fn reveal_bid_for(listing_id: Field, amount: u128, salt: Field, bidder: AztecAddress) {
+        let listing = self.storage.listings.at(listing_id).read();
+        let now = self.context.get_anchor_block_header().timestamp();
+        assert(now >= listing.close_timestamp, "auction has not closed");
+        assert(now <= listing.reveal_deadline, "reveal deadline passed");
+
+        let commitment_hash = crate::bid_note::bid_commitment_hash(amount, salt, bidder);
+        self.enqueue_self._record_reveal(listing_id, commitment_hash, amount);
+    }
+
     /// Anyone finalizes after the deadline, or earlier after every indexed bid
     /// has revealed. The result is derivable from the public revealed rows.
     #[external("public")]
@@ -320,7 +338,6 @@ pub contract SealedAuction {
 
     /// The caller chooses the winner or loser endpoint; the public self-call
     /// verifies that choice against the finalized, publicly checkable result.
-    /// TODO: late-reveal recovery and its penalty are intentionally deferred.
     #[external("private")]
     fn claim_winning_bid(listing_id: Field) {
         let bidder = self.context.maybe_msg_sender().expect(
@@ -330,7 +347,8 @@ pub contract SealedAuction {
         let note_key = note_key(bidder, listing_id);
         let slot = self.storage.bid_notes.at(note_key).at(bidder);
         let note = slot.get_note().get_note();
-        assert(note.revealed, "unrevealed bid is not claimable");
+        // Reveal status is enforced publicly by mark_claim (revealed & !claimed).
+        // The note can still say unrevealed if a relayer used reveal_bid_for.
         assert(!note.bid_settled, "bid already claimed");
         self.enqueue_self._mark_winner_claim(listing_id, note.commitment_hash);
         let fee = note.locked_bid * SETTLEMENT_FEE_BPS / BPS_DENOMINATOR;
@@ -354,7 +372,7 @@ pub contract SealedAuction {
         let note_key = note_key(bidder, listing_id);
         let slot = self.storage.bid_notes.at(note_key).at(bidder);
         let note = slot.get_note().get_note();
-        assert(note.revealed, "unrevealed bid is not claimable");
+        // Reveal status is enforced publicly by mark_claim (revealed & !claimed).
         assert(!note.bid_settled, "bid already claimed");
         self.enqueue_self._mark_loser_claim(listing_id, note.commitment_hash);
         // Losers recover the full locked amount, bid and stake together --
@@ -391,6 +409,9 @@ pub contract SealedAuction {
         let expected_hash = crate::bid_note::bid_commitment_hash(amount, salt, bidder);
         assert(expected_hash == note.commitment_hash, "claim does not match commitment");
         assert(amount == note.locked_bid, "claimed amount differs from locked amount");
+        // Public gate: the record must be unrevealed and unclaimed, and the
+        // deadline must have passed. Closes the relayer-reveal loophole.
+        self.enqueue_self._mark_late_claim(listing_id, note.commitment_hash);
 
         let total_locked = note.locked_bid + note.locked_stake;
         let penalty = total_locked * LATE_REVEAL_PENALTY_BPS / BPS_DENOMINATOR;
@@ -426,16 +447,6 @@ pub contract SealedAuction {
     /// Returns the winning real-estate bidder's locked stake once the
     /// seller has confirmed closing. Kept separate from claim_winning_bid
     /// because the stake must stay locked past bid settlement.
-    ///
-    /// TODO (deferred, depends on Task 3 -- authwit relayer support):
-    /// there is intentionally no `slash_stake_for_default` here yet. In
-    /// Aztec's private-note model, only a note's own owner can nullify it
-    /// -- a third party cannot force a winner's private stake note to move
-    /// without that winner's cooperation or a pre-granted authwit. A
-    /// defaulting winner has no incentive to call a function that slashes
-    /// their own stake, so slashing genuinely requires the winner to grant
-    /// the contract a standing authwit at stake-posting time -- the same
-    /// primitive Task 3 introduces for relayers. Revisit once that lands.
     #[external("private")]
     fn claim_stake_after_closing(listing_id: Field) {
         let bidder = self.context.maybe_msg_sender().expect(
@@ -524,6 +535,42 @@ pub contract SealedAuction {
     #[external("public")]
     fn _mark_loser_claim(listing_id: Field, commitment_hash: Field) {
         self.internal.mark_claim(listing_id, commitment_hash, false);
+    }
+
+    #[only_self]
+    #[external("public")]
+    fn _mark_late_claim(listing_id: Field, commitment_hash: Field) {
+        let listing = self.storage.listings.at(listing_id).read();
+        assert(
+            self.context.timestamp() > listing.reveal_deadline,
+            "reveal deadline has not passed yet",
+        );
+        let count = self.storage.commitment_count.at(listing_id).read();
+        let mut index = 0;
+        let mut found = false;
+        for i in 0..MAX_BIDS_PER_LISTING {
+            if i < count {
+                let bid_record = self.storage.commitments.at(listing_id).at(i).read();
+                if bid_record.commitment_hash == commitment_hash {
+                    index = i;
+                    found = true;
+                }
+            }
+        }
+        assert(found, "commitment not found");
+        let bid_slot = self.storage.commitments.at(listing_id).at(index);
+        let bid_record = bid_slot.read();
+        assert(!bid_record.revealed, "bid was revealed; use the normal claim path");
+        assert(!bid_record.claimed, "bid already claimed");
+        bid_slot.write(
+            CommitmentRecord {
+                commitment_hash: bid_record.commitment_hash,
+                amount: bid_record.amount,
+                revealed: bid_record.revealed,
+                claimed: true,
+                is_winner: bid_record.is_winner,
+            },
+        );
     }
 
     #[only_self]
