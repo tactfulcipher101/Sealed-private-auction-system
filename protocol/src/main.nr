@@ -6,7 +6,9 @@
 //! intermediaries, and the winning bidder's real-world identity is handed to the
 //! seller off-chain when closing requires it.
 //!
-//! TODO: emergency multisig pause is intentionally deferred.
+//! An emergency pause needs a threshold of guardian votes. While paused, new
+//! commitments, reveals, finalization, closing confirmation and slashing are
+//! blocked. Payouts, refunds and already-earned stake returns are never blocked.
 
 mod bid_note;
 
@@ -39,6 +41,9 @@ pub contract SealedAuction {
     // Share of a slashed real-estate stake paid to the seller; the remainder
     // goes to treasury. 10_000 = 100% to the seller.
     global SLASH_SELLER_SHARE_BPS: u128 = 10_000;
+    global PAUSE_SIGNER_COUNT: u32 = 3;
+    // Vote slots 0..3 hold pause votes, slots 3..6 hold unpause votes.
+    global PAUSE_VOTE_SLOTS: u32 = 6;
 
     #[derive(Eq, Packable)]
     pub struct ListingInfo {
@@ -97,14 +102,36 @@ pub contract SealedAuction {
         legal_closing_deadline: Map<Field, PublicMutable<u64, Context>, Context>,
         // True once the winner's stake has left the auction (returned or slashed).
         stake_claimed: Map<Field, PublicMutable<bool, Context>, Context>,
+        pause_signers: Map<u32, PublicImmutable<AztecAddress, Context>, Context>,
+        pause_threshold: PublicImmutable<u8, Context>,
+        guardian_votes: Map<u32, PublicMutable<bool, Context>, Context>,
+        paused: PublicMutable<bool, Context>,
         bid_notes: Map<Field, Owned<PrivateMutable<BidCommitmentNote, Context>, Context>, Context>,
     }
 
     #[initializer]
     #[external("public")]
-    fn constructor(treasury: AztecAddress) {
+    fn constructor(
+        treasury: AztecAddress,
+        pause_guardians: [AztecAddress; 3],
+        pause_threshold: u8,
+    ) {
         assert(!treasury.is_zero(), "treasury cannot be zero");
         self.storage.treasury.initialize(treasury);
+
+        for i in 0..PAUSE_SIGNER_COUNT {
+            assert(!pause_guardians[i].is_zero(), "pause guardian cannot be zero");
+            self.storage.pause_signers.at(i).initialize(pause_guardians[i]);
+        }
+        assert(pause_guardians[0] != pause_guardians[1], "pause guardians must be distinct");
+        assert(pause_guardians[0] != pause_guardians[2], "pause guardians must be distinct");
+        assert(pause_guardians[1] != pause_guardians[2], "pause guardians must be distinct");
+        assert(pause_threshold >= 1, "pause threshold must be at least 1");
+        assert(
+            (pause_threshold as u32) <= PAUSE_SIGNER_COUNT,
+            "pause threshold exceeds guardian count",
+        );
+        self.storage.pause_threshold.initialize(pause_threshold);
     }
 
     #[external("public")]
@@ -262,6 +289,7 @@ pub contract SealedAuction {
     /// has revealed. The result is derivable from the public revealed rows.
     #[external("public")]
     fn finalize_settlement(listing_id: Field) {
+        assert(!self.storage.paused.read(), "protocol is paused");
         let listing = self.storage.listings.at(listing_id).read();
         assert(
             self.storage.status.at(listing_id).read() == STATUS_REVEAL_WINDOW,
@@ -317,6 +345,59 @@ pub contract SealedAuction {
             );
         }
         self.storage.status.at(listing_id).write(STATUS_SETTLED);
+    }
+
+    /// A guardian votes to pause. The pause takes effect once the threshold
+    /// of distinct guardians has voted; all votes clear when the state flips.
+    #[external("public")]
+    fn approve_pause() {
+        self.internal.cast_guardian_vote(true);
+    }
+
+    /// A guardian votes to lift the pause, under the same threshold.
+    #[external("public")]
+    fn approve_unpause() {
+        self.internal.cast_guardian_vote(false);
+    }
+
+    #[external("public")]
+    fn get_paused() -> bool {
+        self.storage.paused.read()
+    }
+
+    #[internal("public")]
+    fn cast_guardian_vote(want_paused: bool) {
+        let caller = self.context.maybe_msg_sender().expect(
+            f"pause votes must come from an account contract",
+        );
+        assert(
+            self.storage.paused.read() != want_paused,
+            "protocol is already in the requested state",
+        );
+        let mut caller_index: u32 = 0;
+        let mut is_guardian = false;
+        for i in 0..PAUSE_SIGNER_COUNT {
+            if self.storage.pause_signers.at(i).read() == caller {
+                caller_index = i;
+                is_guardian = true;
+            }
+        }
+        assert(is_guardian, "only a pause guardian can vote");
+
+        let vote_offset: u32 = if want_paused { 0 } else { PAUSE_SIGNER_COUNT };
+        self.storage.guardian_votes.at(vote_offset + caller_index).write(true);
+        let mut vote_count: u8 = 0;
+        for i in 0..PAUSE_SIGNER_COUNT {
+            if self.storage.guardian_votes.at(vote_offset + i).read() {
+                vote_count += 1;
+            }
+        }
+        if vote_count >= self.storage.pause_threshold.read() {
+            self.storage.paused.write(want_paused);
+            for i in 0..PAUSE_VOTE_SLOTS {
+                self.storage.guardian_votes.at(i).write(false);
+            }
+        }
     }
 
     #[external("public")]
@@ -429,6 +510,7 @@ pub contract SealedAuction {
     /// the winner's stake claim below -- it does not move any funds itself.
     #[external("public")]
     fn confirm_closing(listing_id: Field) {
+        assert(!self.storage.paused.read(), "protocol is paused");
         let listing = self.storage.listings.at(listing_id).read();
         let caller = self.context.maybe_msg_sender().expect(
             f"confirm_closing must be called through an account contract",
@@ -507,6 +589,7 @@ pub contract SealedAuction {
     #[only_self]
     #[external("public")]
     fn _record_commitment(listing_id: Field, commitment_hash: Field) {
+        assert(!self.storage.paused.read(), "protocol is paused");
         let listing = self.storage.listings.at(listing_id).read();
         assert(self.storage.status.at(listing_id).read() == STATUS_OPEN, "auction is not open");
         assert(self.context.timestamp() < listing.close_timestamp, "auction is closed");
@@ -527,6 +610,7 @@ pub contract SealedAuction {
     #[only_self]
     #[external("public")]
     fn _record_reveal(listing_id: Field, commitment_hash: Field, amount: u128) {
+        assert(!self.storage.paused.read(), "protocol is paused");
         let listing = self.storage.listings.at(listing_id).read();
         assert(
             self.storage.status.at(listing_id).read() == STATUS_REVEAL_WINDOW,
@@ -652,6 +736,7 @@ pub contract SealedAuction {
     #[only_self]
     #[external("public")]
     fn _mark_slash(listing_id: Field, winning_amount: u128) {
+        assert(!self.storage.paused.read(), "protocol is paused");
         let listing = self.storage.listings.at(listing_id).read();
         assert(listing.category == CATEGORY_REAL_ESTATE, "only real-estate stakes can be slashed");
         assert(

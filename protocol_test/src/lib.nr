@@ -19,13 +19,16 @@ unconstrained fn two_bidders_reveal_winner_and_settle_loser_refund() {
     let mut env = TestEnvironment::new();
     let seller = env.create_light_account();
     let treasury = env.create_light_account();
+    let guardian_one = env.create_light_account();
+    let guardian_two = env.create_light_account();
+    let guardian_three = env.create_light_account();
     let bidder_a = env.create_contract_account();
     let bidder_b = env.create_contract_account();
 
     let token = env.deploy("@private_token/PrivateToken").without_initializer();
     let auction = env.deploy("@sealed_auction/SealedAuction").with_public_initializer(
         seller,
-        SealedAuction::interface().constructor(treasury),
+        SealedAuction::interface().constructor(treasury, [guardian_one, guardian_two, guardian_three], 2),
     );
 
     env.call_private(bidder_a, PrivateToken::at(token).faucet(BIDDER_A_FUNDS));
@@ -168,6 +171,9 @@ unconstrained fn late_reveal_forfeits_penalty_to_treasury() {
     let mut env = TestEnvironment::new();
     let seller = env.create_light_account();
     let treasury = env.create_light_account();
+    let guardian_one = env.create_light_account();
+    let guardian_two = env.create_light_account();
+    let guardian_three = env.create_light_account();
     let bidder = env.create_contract_account();
 
     let listing_id: Field = 42;
@@ -180,7 +186,7 @@ unconstrained fn late_reveal_forfeits_penalty_to_treasury() {
     let token = env.deploy("@private_token/PrivateToken").without_initializer();
     let auction = env.deploy("@sealed_auction/SealedAuction").with_public_initializer(
         seller,
-        SealedAuction::interface().constructor(treasury),
+        SealedAuction::interface().constructor(treasury, [guardian_one, guardian_two, guardian_three], 2),
     );
 
     env.call_private(bidder, PrivateToken::at(token).faucet(bidder_funds));
@@ -255,6 +261,9 @@ unconstrained fn real_estate_winner_stake_returns_after_closing_and_loser_gets_b
     let mut env = TestEnvironment::new();
     let seller = env.create_light_account();
     let treasury = env.create_light_account();
+    let guardian_one = env.create_light_account();
+    let guardian_two = env.create_light_account();
+    let guardian_three = env.create_light_account();
     let losing_bidder = env.create_contract_account();
     let winning_bidder = env.create_contract_account();
 
@@ -277,7 +286,7 @@ unconstrained fn real_estate_winner_stake_returns_after_closing_and_loser_gets_b
     let token = env.deploy("@private_token/PrivateToken").without_initializer();
     let auction = env.deploy("@sealed_auction/SealedAuction").with_public_initializer(
         seller,
-        SealedAuction::interface().constructor(treasury),
+        SealedAuction::interface().constructor(treasury, [guardian_one, guardian_two, guardian_three], 2),
     );
 
     env.call_private(losing_bidder, PrivateToken::at(token).faucet(losing_bidder_funds));
@@ -451,6 +460,9 @@ unconstrained fn real_estate_stake_claim_before_closing_confirmation_reverts() {
     let mut env = TestEnvironment::new();
     let seller = env.create_light_account();
     let treasury = env.create_light_account();
+    let guardian_one = env.create_light_account();
+    let guardian_two = env.create_light_account();
+    let guardian_three = env.create_light_account();
     let bidder = env.create_contract_account();
 
     let bid_amount: u128 = 300;
@@ -462,7 +474,7 @@ unconstrained fn real_estate_stake_claim_before_closing_confirmation_reverts() {
     let token = env.deploy("@private_token/PrivateToken").without_initializer();
     let auction = env.deploy("@sealed_auction/SealedAuction").with_public_initializer(
         seller,
-        SealedAuction::interface().constructor(treasury),
+        SealedAuction::interface().constructor(treasury, [guardian_one, guardian_two, guardian_three], 2),
     );
     env.call_private(bidder, PrivateToken::at(token).faucet(700));
 
@@ -521,6 +533,9 @@ unconstrained fn relayer_reveals_for_both_bidders_then_normal_claims() {
     let mut env = TestEnvironment::new();
     let seller = env.create_light_account();
     let treasury = env.create_light_account();
+    let guardian_one = env.create_light_account();
+    let guardian_two = env.create_light_account();
+    let guardian_three = env.create_light_account();
     let relayer = env.create_light_account();
     let bidder_a = env.create_contract_account();
     let bidder_b = env.create_contract_account();
@@ -528,7 +543,7 @@ unconstrained fn relayer_reveals_for_both_bidders_then_normal_claims() {
     let token = env.deploy("@private_token/PrivateToken").without_initializer();
     let auction = env.deploy("@sealed_auction/SealedAuction").with_public_initializer(
         seller,
-        SealedAuction::interface().constructor(treasury),
+        SealedAuction::interface().constructor(treasury, [guardian_one, guardian_two, guardian_three], 2),
     );
 
     env.call_private(bidder_a, PrivateToken::at(token).faucet(BIDDER_A_FUNDS));
@@ -644,6 +659,9 @@ unconstrained fn reveal_bid_for_wrong_salt_reverts() {
     let mut env = TestEnvironment::new();
     let seller = env.create_light_account();
     let treasury = env.create_light_account();
+    let guardian_one = env.create_light_account();
+    let guardian_two = env.create_light_account();
+    let guardian_three = env.create_light_account();
     let relayer = env.create_light_account();
     let bidder = env.create_contract_account();
 
@@ -653,7 +671,7 @@ unconstrained fn reveal_bid_for_wrong_salt_reverts() {
     let token = env.deploy("@private_token/PrivateToken").without_initializer();
     let auction = env.deploy("@sealed_auction/SealedAuction").with_public_initializer(
         seller,
-        SealedAuction::interface().constructor(treasury),
+        SealedAuction::interface().constructor(treasury, [guardian_one, guardian_two, guardian_three], 2),
     );
     env.call_private(bidder, PrivateToken::at(token).faucet(BIDDER_A_FUNDS));
 
@@ -702,6 +720,9 @@ unconstrained fn reveal_bid_for_wrong_amount_reverts() {
     let mut env = TestEnvironment::new();
     let seller = env.create_light_account();
     let treasury = env.create_light_account();
+    let guardian_one = env.create_light_account();
+    let guardian_two = env.create_light_account();
+    let guardian_three = env.create_light_account();
     let relayer = env.create_light_account();
     let bidder = env.create_contract_account();
 
@@ -711,7 +732,7 @@ unconstrained fn reveal_bid_for_wrong_amount_reverts() {
     let token = env.deploy("@private_token/PrivateToken").without_initializer();
     let auction = env.deploy("@sealed_auction/SealedAuction").with_public_initializer(
         seller,
-        SealedAuction::interface().constructor(treasury),
+        SealedAuction::interface().constructor(treasury, [guardian_one, guardian_two, guardian_three], 2),
     );
     env.call_private(bidder, PrivateToken::at(token).faucet(BIDDER_A_FUNDS));
 
@@ -759,6 +780,9 @@ unconstrained fn reveal_bid_for_wrong_bidder_reverts() {
     let mut env = TestEnvironment::new();
     let seller = env.create_light_account();
     let treasury = env.create_light_account();
+    let guardian_one = env.create_light_account();
+    let guardian_two = env.create_light_account();
+    let guardian_three = env.create_light_account();
     let relayer = env.create_light_account();
     let wrong_bidder = env.create_light_account();
     let bidder = env.create_contract_account();
@@ -769,7 +793,7 @@ unconstrained fn reveal_bid_for_wrong_bidder_reverts() {
     let token = env.deploy("@private_token/PrivateToken").without_initializer();
     let auction = env.deploy("@sealed_auction/SealedAuction").with_public_initializer(
         seller,
-        SealedAuction::interface().constructor(treasury),
+        SealedAuction::interface().constructor(treasury, [guardian_one, guardian_two, guardian_three], 2),
     );
     env.call_private(bidder, PrivateToken::at(token).faucet(BIDDER_A_FUNDS));
 
@@ -817,6 +841,9 @@ unconstrained fn late_reveal_claim_after_relayer_reveal_reverts() {
     let mut env = TestEnvironment::new();
     let seller = env.create_light_account();
     let treasury = env.create_light_account();
+    let guardian_one = env.create_light_account();
+    let guardian_two = env.create_light_account();
+    let guardian_three = env.create_light_account();
     let relayer = env.create_light_account();
     let bidder = env.create_contract_account();
 
@@ -826,7 +853,7 @@ unconstrained fn late_reveal_claim_after_relayer_reveal_reverts() {
     let token = env.deploy("@private_token/PrivateToken").without_initializer();
     let auction = env.deploy("@sealed_auction/SealedAuction").with_public_initializer(
         seller,
-        SealedAuction::interface().constructor(treasury),
+        SealedAuction::interface().constructor(treasury, [guardian_one, guardian_two, guardian_three], 2),
     );
     env.call_private(bidder, PrivateToken::at(token).faucet(BIDDER_A_FUNDS));
 
@@ -882,6 +909,9 @@ unconstrained fn settle_winning_bid_pays_seller_without_winner_then_stake_return
     let mut env = TestEnvironment::new();
     let seller = env.create_light_account();
     let treasury = env.create_light_account();
+    let guardian_one = env.create_light_account();
+    let guardian_two = env.create_light_account();
+    let guardian_three = env.create_light_account();
     let relayer = env.create_light_account();
     let bidder = env.create_contract_account();
 
@@ -895,7 +925,7 @@ unconstrained fn settle_winning_bid_pays_seller_without_winner_then_stake_return
     let token = env.deploy("@private_token/PrivateToken").without_initializer();
     let auction = env.deploy("@sealed_auction/SealedAuction").with_public_initializer(
         seller,
-        SealedAuction::interface().constructor(treasury),
+        SealedAuction::interface().constructor(treasury, [guardian_one, guardian_two, guardian_three], 2),
     );
     env.call_private(bidder, PrivateToken::at(token).faucet(bidder_funds));
 
@@ -979,6 +1009,9 @@ unconstrained fn winner_claim_after_permissionless_settle_reverts() {
     let mut env = TestEnvironment::new();
     let seller = env.create_light_account();
     let treasury = env.create_light_account();
+    let guardian_one = env.create_light_account();
+    let guardian_two = env.create_light_account();
+    let guardian_three = env.create_light_account();
     let relayer = env.create_light_account();
     let bidder = env.create_contract_account();
 
@@ -992,7 +1025,7 @@ unconstrained fn winner_claim_after_permissionless_settle_reverts() {
     let token = env.deploy("@private_token/PrivateToken").without_initializer();
     let auction = env.deploy("@sealed_auction/SealedAuction").with_public_initializer(
         seller,
-        SealedAuction::interface().constructor(treasury),
+        SealedAuction::interface().constructor(treasury, [guardian_one, guardian_two, guardian_three], 2),
     );
     env.call_private(bidder, PrivateToken::at(token).faucet(bidder_funds));
 
@@ -1053,6 +1086,9 @@ unconstrained fn permissionless_settle_after_winner_claim_reverts() {
     let mut env = TestEnvironment::new();
     let seller = env.create_light_account();
     let treasury = env.create_light_account();
+    let guardian_one = env.create_light_account();
+    let guardian_two = env.create_light_account();
+    let guardian_three = env.create_light_account();
     let relayer = env.create_light_account();
     let bidder = env.create_contract_account();
 
@@ -1066,7 +1102,7 @@ unconstrained fn permissionless_settle_after_winner_claim_reverts() {
     let token = env.deploy("@private_token/PrivateToken").without_initializer();
     let auction = env.deploy("@sealed_auction/SealedAuction").with_public_initializer(
         seller,
-        SealedAuction::interface().constructor(treasury),
+        SealedAuction::interface().constructor(treasury, [guardian_one, guardian_two, guardian_three], 2),
     );
     env.call_private(bidder, PrivateToken::at(token).faucet(bidder_funds));
 
@@ -1127,6 +1163,9 @@ unconstrained fn slash_after_legal_closing_deadline_pays_stake_to_seller() {
     let mut env = TestEnvironment::new();
     let seller = env.create_light_account();
     let treasury = env.create_light_account();
+    let guardian_one = env.create_light_account();
+    let guardian_two = env.create_light_account();
+    let guardian_three = env.create_light_account();
     let relayer = env.create_light_account();
     let bidder = env.create_contract_account();
 
@@ -1140,7 +1179,7 @@ unconstrained fn slash_after_legal_closing_deadline_pays_stake_to_seller() {
     let token = env.deploy("@private_token/PrivateToken").without_initializer();
     let auction = env.deploy("@sealed_auction/SealedAuction").with_public_initializer(
         seller,
-        SealedAuction::interface().constructor(treasury),
+        SealedAuction::interface().constructor(treasury, [guardian_one, guardian_two, guardian_three], 2),
     );
     env.call_private(bidder, PrivateToken::at(token).faucet(bidder_funds));
 
@@ -1215,6 +1254,9 @@ unconstrained fn slash_before_legal_closing_deadline_reverts() {
     let mut env = TestEnvironment::new();
     let seller = env.create_light_account();
     let treasury = env.create_light_account();
+    let guardian_one = env.create_light_account();
+    let guardian_two = env.create_light_account();
+    let guardian_three = env.create_light_account();
     let relayer = env.create_light_account();
     let bidder = env.create_contract_account();
 
@@ -1228,7 +1270,7 @@ unconstrained fn slash_before_legal_closing_deadline_reverts() {
     let token = env.deploy("@private_token/PrivateToken").without_initializer();
     let auction = env.deploy("@sealed_auction/SealedAuction").with_public_initializer(
         seller,
-        SealedAuction::interface().constructor(treasury),
+        SealedAuction::interface().constructor(treasury, [guardian_one, guardian_two, guardian_three], 2),
     );
     env.call_private(bidder, PrivateToken::at(token).faucet(bidder_funds));
 
@@ -1290,6 +1332,9 @@ unconstrained fn slash_after_confirm_closing_reverts() {
     let mut env = TestEnvironment::new();
     let seller = env.create_light_account();
     let treasury = env.create_light_account();
+    let guardian_one = env.create_light_account();
+    let guardian_two = env.create_light_account();
+    let guardian_three = env.create_light_account();
     let relayer = env.create_light_account();
     let bidder = env.create_contract_account();
 
@@ -1303,7 +1348,7 @@ unconstrained fn slash_after_confirm_closing_reverts() {
     let token = env.deploy("@private_token/PrivateToken").without_initializer();
     let auction = env.deploy("@sealed_auction/SealedAuction").with_public_initializer(
         seller,
-        SealedAuction::interface().constructor(treasury),
+        SealedAuction::interface().constructor(treasury, [guardian_one, guardian_two, guardian_three], 2),
     );
     env.call_private(bidder, PrivateToken::at(token).faucet(bidder_funds));
 
@@ -1366,6 +1411,9 @@ unconstrained fn winner_stake_claim_after_slash_reverts() {
     let mut env = TestEnvironment::new();
     let seller = env.create_light_account();
     let treasury = env.create_light_account();
+    let guardian_one = env.create_light_account();
+    let guardian_two = env.create_light_account();
+    let guardian_three = env.create_light_account();
     let relayer = env.create_light_account();
     let bidder = env.create_contract_account();
 
@@ -1379,7 +1427,7 @@ unconstrained fn winner_stake_claim_after_slash_reverts() {
     let token = env.deploy("@private_token/PrivateToken").without_initializer();
     let auction = env.deploy("@sealed_auction/SealedAuction").with_public_initializer(
         seller,
-        SealedAuction::interface().constructor(treasury),
+        SealedAuction::interface().constructor(treasury, [guardian_one, guardian_two, guardian_three], 2),
     );
     env.call_private(bidder, PrivateToken::at(token).faucet(bidder_funds));
 
@@ -1439,4 +1487,561 @@ unconstrained fn winner_stake_claim_after_slash_reverts() {
         CallPrivateOptions::new().with_additional_scopes([auction, token]),
         SealedAuction::at(auction).claim_stake_after_closing(REAL_ESTATE_LISTING_ID),
     );
+}
+
+
+#[test]
+unconstrained fn pause_and_unpause_each_need_the_threshold_of_guardians() {
+    let mut env = TestEnvironment::new();
+    let seller = env.create_light_account();
+    let treasury = env.create_light_account();
+    let guardian_one = env.create_light_account();
+    let guardian_two = env.create_light_account();
+    let guardian_three = env.create_light_account();
+    let auction = env.deploy("@sealed_auction/SealedAuction").with_public_initializer(
+        seller,
+        SealedAuction::interface().constructor(treasury, [guardian_one, guardian_two, guardian_three], 2),
+    );
+    let paused_now = env.call_public(seller, SealedAuction::at(auction).get_paused());
+    assert(!paused_now, "a fresh deployment starts unpaused");
+    env.call_public(guardian_one, SealedAuction::at(auction).approve_pause());
+    assert(!env.call_public(seller, SealedAuction::at(auction).get_paused()), "one vote is below the threshold of two");
+    env.call_public(guardian_two, SealedAuction::at(auction).approve_pause());
+    assert(env.call_public(seller, SealedAuction::at(auction).get_paused()), "two votes reach the threshold");
+    env.call_public(guardian_three, SealedAuction::at(auction).approve_unpause());
+    assert(env.call_public(seller, SealedAuction::at(auction).get_paused()), "one unpause vote is below the threshold");
+    env.call_public(guardian_one, SealedAuction::at(auction).approve_unpause());
+    assert(!env.call_public(seller, SealedAuction::at(auction).get_paused()), "two unpause votes lift the pause");
+    env.call_public(guardian_one, SealedAuction::at(auction).approve_pause());
+    assert(!env.call_public(seller, SealedAuction::at(auction).get_paused()), "earlier votes were cleared, one new vote must not pause");
+}
+
+
+#[test(should_fail)]
+unconstrained fn non_guardian_pause_vote_reverts() {
+    let mut env = TestEnvironment::new();
+    let seller = env.create_light_account();
+    let treasury = env.create_light_account();
+    let guardian_one = env.create_light_account();
+    let guardian_two = env.create_light_account();
+    let guardian_three = env.create_light_account();
+    let outsider = env.create_light_account();
+    let auction = env.deploy("@sealed_auction/SealedAuction").with_public_initializer(
+        seller,
+        SealedAuction::interface().constructor(treasury, [guardian_one, guardian_two, guardian_three], 2),
+    );
+    let voter_is_guardian: bool = false;
+    let mut voter = outsider;
+    if voter_is_guardian {
+        voter = guardian_one;
+    }
+    env.call_public(voter, SealedAuction::at(auction).approve_pause());
+}
+
+
+#[test(should_fail)]
+unconstrained fn paused_commit_bid_reverts() {
+    let mut env = TestEnvironment::new();
+    let seller = env.create_light_account();
+    let treasury = env.create_light_account();
+    let guardian_one = env.create_light_account();
+    let guardian_two = env.create_light_account();
+    let guardian_three = env.create_light_account();
+    let bidder = env.create_contract_account();
+    let bid_amount: u128 = 300;
+    let stake_amount = bid_amount * (REAL_ESTATE_STAKE_BPS as u128) / 10_000;
+    let total_locked = bid_amount + stake_amount;
+    let bidder_funds: u128 = 700;
+    let salt: Field = 0x9c01;
+    let token = env.deploy("@private_token/PrivateToken").without_initializer();
+    let auction = env.deploy("@sealed_auction/SealedAuction").with_public_initializer(
+        seller,
+        SealedAuction::interface().constructor(treasury, [guardian_one, guardian_two, guardian_three], 2),
+    );
+    env.call_private(bidder, PrivateToken::at(token).faucet(bidder_funds));
+    let close_timestamp = env.last_block_timestamp() + 1000;
+    let reveal_deadline = close_timestamp + 1000;
+    env.call_public(
+        seller,
+        SealedAuction::at(auction).create_listing(
+            REAL_ESTATE_LISTING_ID,
+            token,
+            100,
+            close_timestamp,
+            reveal_deadline,
+            true,
+            1,
+            REAL_ESTATE_STAKE_BPS,
+            REAL_ESTATE_LEGAL_CLOSING_WINDOW,
+        ),
+    );
+    add_private_authwit_from_call(
+        env,
+        bidder,
+        auction,
+        PrivateToken::at(token).transfer_in_private(bidder, auction, total_locked, TOKEN_AUTHWIT_NONCE),
+    );
+    let pause_before_commit: bool = true;
+    if pause_before_commit {
+        env.call_public(guardian_one, SealedAuction::at(auction).approve_pause());
+        env.call_public(guardian_two, SealedAuction::at(auction).approve_pause());
+    }
+    env.call_private_opts(
+        bidder,
+        CallPrivateOptions::new().with_additional_scopes([auction, token]),
+        SealedAuction::at(auction).commit_bid(REAL_ESTATE_LISTING_ID, bid_amount, salt, TOKEN_AUTHWIT_NONCE),
+    );
+}
+
+
+#[test(should_fail)]
+unconstrained fn paused_reveal_reverts() {
+    let mut env = TestEnvironment::new();
+    let seller = env.create_light_account();
+    let treasury = env.create_light_account();
+    let guardian_one = env.create_light_account();
+    let guardian_two = env.create_light_account();
+    let guardian_three = env.create_light_account();
+    let bidder = env.create_contract_account();
+    let bid_amount: u128 = 300;
+    let stake_amount = bid_amount * (REAL_ESTATE_STAKE_BPS as u128) / 10_000;
+    let total_locked = bid_amount + stake_amount;
+    let bidder_funds: u128 = 700;
+    let salt: Field = 0x9c02;
+    let token = env.deploy("@private_token/PrivateToken").without_initializer();
+    let auction = env.deploy("@sealed_auction/SealedAuction").with_public_initializer(
+        seller,
+        SealedAuction::interface().constructor(treasury, [guardian_one, guardian_two, guardian_three], 2),
+    );
+    env.call_private(bidder, PrivateToken::at(token).faucet(bidder_funds));
+    let close_timestamp = env.last_block_timestamp() + 1000;
+    let reveal_deadline = close_timestamp + 1000;
+    env.call_public(
+        seller,
+        SealedAuction::at(auction).create_listing(
+            REAL_ESTATE_LISTING_ID,
+            token,
+            100,
+            close_timestamp,
+            reveal_deadline,
+            true,
+            1,
+            REAL_ESTATE_STAKE_BPS,
+            REAL_ESTATE_LEGAL_CLOSING_WINDOW,
+        ),
+    );
+    add_private_authwit_from_call(
+        env,
+        bidder,
+        auction,
+        PrivateToken::at(token).transfer_in_private(bidder, auction, total_locked, TOKEN_AUTHWIT_NONCE),
+    );
+    env.call_private_opts(
+        bidder,
+        CallPrivateOptions::new().with_additional_scopes([auction, token]),
+        SealedAuction::at(auction).commit_bid(REAL_ESTATE_LISTING_ID, bid_amount, salt, TOKEN_AUTHWIT_NONCE),
+    );
+    env.mine_block_at(close_timestamp + 1);
+    env.call_public(seller, SealedAuction::at(auction).close_auction(REAL_ESTATE_LISTING_ID));
+    let pause_before_reveal: bool = true;
+    if pause_before_reveal {
+        env.call_public(guardian_one, SealedAuction::at(auction).approve_pause());
+        env.call_public(guardian_two, SealedAuction::at(auction).approve_pause());
+    }
+    env.call_private_opts(
+        bidder,
+        CallPrivateOptions::new().with_additional_scopes([auction]),
+        SealedAuction::at(auction).reveal_bid(REAL_ESTATE_LISTING_ID, bid_amount, salt),
+    );
+}
+
+
+#[test(should_fail)]
+unconstrained fn paused_finalize_reverts() {
+    let mut env = TestEnvironment::new();
+    let seller = env.create_light_account();
+    let treasury = env.create_light_account();
+    let guardian_one = env.create_light_account();
+    let guardian_two = env.create_light_account();
+    let guardian_three = env.create_light_account();
+    let bidder = env.create_contract_account();
+    let bid_amount: u128 = 300;
+    let stake_amount = bid_amount * (REAL_ESTATE_STAKE_BPS as u128) / 10_000;
+    let total_locked = bid_amount + stake_amount;
+    let bidder_funds: u128 = 700;
+    let salt: Field = 0x9c03;
+    let token = env.deploy("@private_token/PrivateToken").without_initializer();
+    let auction = env.deploy("@sealed_auction/SealedAuction").with_public_initializer(
+        seller,
+        SealedAuction::interface().constructor(treasury, [guardian_one, guardian_two, guardian_three], 2),
+    );
+    env.call_private(bidder, PrivateToken::at(token).faucet(bidder_funds));
+    let close_timestamp = env.last_block_timestamp() + 1000;
+    let reveal_deadline = close_timestamp + 1000;
+    env.call_public(
+        seller,
+        SealedAuction::at(auction).create_listing(
+            REAL_ESTATE_LISTING_ID,
+            token,
+            100,
+            close_timestamp,
+            reveal_deadline,
+            true,
+            1,
+            REAL_ESTATE_STAKE_BPS,
+            REAL_ESTATE_LEGAL_CLOSING_WINDOW,
+        ),
+    );
+    add_private_authwit_from_call(
+        env,
+        bidder,
+        auction,
+        PrivateToken::at(token).transfer_in_private(bidder, auction, total_locked, TOKEN_AUTHWIT_NONCE),
+    );
+    env.call_private_opts(
+        bidder,
+        CallPrivateOptions::new().with_additional_scopes([auction, token]),
+        SealedAuction::at(auction).commit_bid(REAL_ESTATE_LISTING_ID, bid_amount, salt, TOKEN_AUTHWIT_NONCE),
+    );
+    env.mine_block_at(close_timestamp + 1);
+    env.call_public(seller, SealedAuction::at(auction).close_auction(REAL_ESTATE_LISTING_ID));
+    env.call_private_opts(
+        bidder,
+        CallPrivateOptions::new().with_additional_scopes([auction]),
+        SealedAuction::at(auction).reveal_bid(REAL_ESTATE_LISTING_ID, bid_amount, salt),
+    );
+    let pause_before_finalize: bool = true;
+    if pause_before_finalize {
+        env.call_public(guardian_one, SealedAuction::at(auction).approve_pause());
+        env.call_public(guardian_two, SealedAuction::at(auction).approve_pause());
+    }
+    env.call_public(seller, SealedAuction::at(auction).finalize_settlement(REAL_ESTATE_LISTING_ID));
+}
+
+
+#[test(should_fail)]
+unconstrained fn paused_confirm_closing_reverts() {
+    let mut env = TestEnvironment::new();
+    let seller = env.create_light_account();
+    let treasury = env.create_light_account();
+    let guardian_one = env.create_light_account();
+    let guardian_two = env.create_light_account();
+    let guardian_three = env.create_light_account();
+    let bidder = env.create_contract_account();
+    let bid_amount: u128 = 300;
+    let stake_amount = bid_amount * (REAL_ESTATE_STAKE_BPS as u128) / 10_000;
+    let total_locked = bid_amount + stake_amount;
+    let bidder_funds: u128 = 700;
+    let salt: Field = 0x9c04;
+    let token = env.deploy("@private_token/PrivateToken").without_initializer();
+    let auction = env.deploy("@sealed_auction/SealedAuction").with_public_initializer(
+        seller,
+        SealedAuction::interface().constructor(treasury, [guardian_one, guardian_two, guardian_three], 2),
+    );
+    env.call_private(bidder, PrivateToken::at(token).faucet(bidder_funds));
+    let close_timestamp = env.last_block_timestamp() + 1000;
+    let reveal_deadline = close_timestamp + 1000;
+    env.call_public(
+        seller,
+        SealedAuction::at(auction).create_listing(
+            REAL_ESTATE_LISTING_ID,
+            token,
+            100,
+            close_timestamp,
+            reveal_deadline,
+            true,
+            1,
+            REAL_ESTATE_STAKE_BPS,
+            REAL_ESTATE_LEGAL_CLOSING_WINDOW,
+        ),
+    );
+    add_private_authwit_from_call(
+        env,
+        bidder,
+        auction,
+        PrivateToken::at(token).transfer_in_private(bidder, auction, total_locked, TOKEN_AUTHWIT_NONCE),
+    );
+    env.call_private_opts(
+        bidder,
+        CallPrivateOptions::new().with_additional_scopes([auction, token]),
+        SealedAuction::at(auction).commit_bid(REAL_ESTATE_LISTING_ID, bid_amount, salt, TOKEN_AUTHWIT_NONCE),
+    );
+    env.mine_block_at(close_timestamp + 1);
+    env.call_public(seller, SealedAuction::at(auction).close_auction(REAL_ESTATE_LISTING_ID));
+    env.call_private_opts(
+        bidder,
+        CallPrivateOptions::new().with_additional_scopes([auction]),
+        SealedAuction::at(auction).reveal_bid(REAL_ESTATE_LISTING_ID, bid_amount, salt),
+    );
+    env.call_public(seller, SealedAuction::at(auction).finalize_settlement(REAL_ESTATE_LISTING_ID));
+    let pause_before_confirm: bool = true;
+    if pause_before_confirm {
+        env.call_public(guardian_one, SealedAuction::at(auction).approve_pause());
+        env.call_public(guardian_two, SealedAuction::at(auction).approve_pause());
+    }
+    env.call_public(seller, SealedAuction::at(auction).confirm_closing(REAL_ESTATE_LISTING_ID));
+}
+
+
+#[test(should_fail)]
+unconstrained fn paused_slash_reverts() {
+    let mut env = TestEnvironment::new();
+    let seller = env.create_light_account();
+    let treasury = env.create_light_account();
+    let guardian_one = env.create_light_account();
+    let guardian_two = env.create_light_account();
+    let guardian_three = env.create_light_account();
+    let relayer = env.create_light_account();
+    let bidder = env.create_contract_account();
+    let bid_amount: u128 = 300;
+    let stake_amount = bid_amount * (REAL_ESTATE_STAKE_BPS as u128) / 10_000;
+    let total_locked = bid_amount + stake_amount;
+    let bidder_funds: u128 = 700;
+    let salt: Field = 0x9c05;
+    let token = env.deploy("@private_token/PrivateToken").without_initializer();
+    let auction = env.deploy("@sealed_auction/SealedAuction").with_public_initializer(
+        seller,
+        SealedAuction::interface().constructor(treasury, [guardian_one, guardian_two, guardian_three], 2),
+    );
+    env.call_private(bidder, PrivateToken::at(token).faucet(bidder_funds));
+    let close_timestamp = env.last_block_timestamp() + 1000;
+    let reveal_deadline = close_timestamp + 1000;
+    env.call_public(
+        seller,
+        SealedAuction::at(auction).create_listing(
+            REAL_ESTATE_LISTING_ID,
+            token,
+            100,
+            close_timestamp,
+            reveal_deadline,
+            true,
+            1,
+            REAL_ESTATE_STAKE_BPS,
+            REAL_ESTATE_LEGAL_CLOSING_WINDOW,
+        ),
+    );
+    add_private_authwit_from_call(
+        env,
+        bidder,
+        auction,
+        PrivateToken::at(token).transfer_in_private(bidder, auction, total_locked, TOKEN_AUTHWIT_NONCE),
+    );
+    env.call_private_opts(
+        bidder,
+        CallPrivateOptions::new().with_additional_scopes([auction, token]),
+        SealedAuction::at(auction).commit_bid(REAL_ESTATE_LISTING_ID, bid_amount, salt, TOKEN_AUTHWIT_NONCE),
+    );
+    env.mine_block_at(close_timestamp + 1);
+    env.call_public(seller, SealedAuction::at(auction).close_auction(REAL_ESTATE_LISTING_ID));
+    env.call_private_opts(
+        bidder,
+        CallPrivateOptions::new().with_additional_scopes([auction]),
+        SealedAuction::at(auction).reveal_bid(REAL_ESTATE_LISTING_ID, bid_amount, salt),
+    );
+    env.call_public(seller, SealedAuction::at(auction).finalize_settlement(REAL_ESTATE_LISTING_ID));
+    env.call_private_opts(
+        relayer,
+        CallPrivateOptions::new().with_additional_scopes([auction, token]),
+        SealedAuction::at(auction).settle_winning_bid(REAL_ESTATE_LISTING_ID, bid_amount),
+    );
+    env.mine_block_at(reveal_deadline + 5 * REAL_ESTATE_LEGAL_CLOSING_WINDOW);
+    let pause_before_slash: bool = true;
+    if pause_before_slash {
+        env.call_public(guardian_one, SealedAuction::at(auction).approve_pause());
+        env.call_public(guardian_two, SealedAuction::at(auction).approve_pause());
+    }
+    env.call_private_opts(
+        relayer,
+        CallPrivateOptions::new().with_additional_scopes([auction, token]),
+        SealedAuction::at(auction).slash_stake_for_default(REAL_ESTATE_LISTING_ID, bid_amount),
+    );
+}
+
+
+#[test]
+unconstrained fn payouts_refunds_and_earned_stake_still_work_while_paused() {
+    let mut env = TestEnvironment::new();
+    let seller = env.create_light_account();
+    let treasury = env.create_light_account();
+    let guardian_one = env.create_light_account();
+    let guardian_two = env.create_light_account();
+    let guardian_three = env.create_light_account();
+    let loser = env.create_contract_account();
+    let winner = env.create_contract_account();
+    let loser_bid: u128 = 200;
+    let winner_bid: u128 = 300;
+    let loser_stake = loser_bid * (REAL_ESTATE_STAKE_BPS as u128) / 10_000;
+    let winner_stake = winner_bid * (REAL_ESTATE_STAKE_BPS as u128) / 10_000;
+    let loser_funds: u128 = 500;
+    let winner_funds: u128 = 700;
+    let loser_salt: Field = 0x9b01;
+    let winner_salt: Field = 0x9b02;
+    let settlement_fee = winner_bid * 300 / 10_000;
+    let token = env.deploy("@private_token/PrivateToken").without_initializer();
+    let auction = env.deploy("@sealed_auction/SealedAuction").with_public_initializer(
+        seller,
+        SealedAuction::interface().constructor(treasury, [guardian_one, guardian_two, guardian_three], 2),
+    );
+    env.call_private(loser, PrivateToken::at(token).faucet(loser_funds));
+    env.call_private(winner, PrivateToken::at(token).faucet(winner_funds));
+    let close_timestamp = env.last_block_timestamp() + 1000;
+    let reveal_deadline = close_timestamp + 1000;
+    env.call_public(
+        seller,
+        SealedAuction::at(auction).create_listing(
+            REAL_ESTATE_LISTING_ID,
+            token,
+            100,
+            close_timestamp,
+            reveal_deadline,
+            true,
+            1,
+            REAL_ESTATE_STAKE_BPS,
+            REAL_ESTATE_LEGAL_CLOSING_WINDOW,
+        ),
+    );
+    add_private_authwit_from_call(
+        env,
+        loser,
+        auction,
+        PrivateToken::at(token).transfer_in_private(loser, auction, (loser_bid + loser_stake), TOKEN_AUTHWIT_NONCE),
+    );
+    add_private_authwit_from_call(
+        env,
+        winner,
+        auction,
+        PrivateToken::at(token).transfer_in_private(winner, auction, (winner_bid + winner_stake), TOKEN_AUTHWIT_NONCE),
+    );
+    env.call_private_opts(
+        loser,
+        CallPrivateOptions::new().with_additional_scopes([auction, token]),
+        SealedAuction::at(auction).commit_bid(REAL_ESTATE_LISTING_ID, loser_bid, loser_salt, TOKEN_AUTHWIT_NONCE),
+    );
+    env.call_private_opts(
+        winner,
+        CallPrivateOptions::new().with_additional_scopes([auction, token]),
+        SealedAuction::at(auction).commit_bid(REAL_ESTATE_LISTING_ID, winner_bid, winner_salt, TOKEN_AUTHWIT_NONCE),
+    );
+    env.mine_block_at(close_timestamp + 1);
+    env.call_public(seller, SealedAuction::at(auction).close_auction(REAL_ESTATE_LISTING_ID));
+    env.call_private_opts(
+        loser,
+        CallPrivateOptions::new().with_additional_scopes([auction]),
+        SealedAuction::at(auction).reveal_bid(REAL_ESTATE_LISTING_ID, loser_bid, loser_salt),
+    );
+    env.call_private_opts(
+        winner,
+        CallPrivateOptions::new().with_additional_scopes([auction]),
+        SealedAuction::at(auction).reveal_bid(REAL_ESTATE_LISTING_ID, winner_bid, winner_salt),
+    );
+    env.call_public(seller, SealedAuction::at(auction).finalize_settlement(REAL_ESTATE_LISTING_ID));
+    env.call_public(seller, SealedAuction::at(auction).confirm_closing(REAL_ESTATE_LISTING_ID));
+    env.call_public(guardian_one, SealedAuction::at(auction).approve_pause());
+    env.call_public(guardian_two, SealedAuction::at(auction).approve_pause());
+    assert(env.call_public(seller, SealedAuction::at(auction).get_paused()), "protocol should be paused here");
+    env.call_private_opts(
+        loser,
+        CallPrivateOptions::new().with_additional_scopes([auction, token]),
+        SealedAuction::at(auction).claim_losing_bid(REAL_ESTATE_LISTING_ID),
+    );
+    env.call_private_opts(
+        winner,
+        CallPrivateOptions::new().with_additional_scopes([auction, token]),
+        SealedAuction::at(auction).claim_winning_bid(REAL_ESTATE_LISTING_ID),
+    );
+    env.call_private_opts(
+        winner,
+        CallPrivateOptions::new().with_additional_scopes([auction, token]),
+        SealedAuction::at(auction).claim_stake_after_closing(REAL_ESTATE_LISTING_ID),
+    );
+    let loser_balance = env.execute_utility_opts(
+        ExecuteUtilityOptions::new().with_from(loser),
+        PrivateToken::at(token).balance_of_private(loser),
+    );
+    let winner_balance = env.execute_utility_opts(
+        ExecuteUtilityOptions::new().with_from(winner),
+        PrivateToken::at(token).balance_of_private(winner),
+    );
+    let seller_balance = env.execute_utility_opts(
+        ExecuteUtilityOptions::new().with_from(seller),
+        PrivateToken::at(token).balance_of_private(seller),
+    );
+    let treasury_balance = env.execute_utility_opts(
+        ExecuteUtilityOptions::new().with_from(treasury),
+        PrivateToken::at(token).balance_of_private(treasury),
+    );
+    assert_eq(loser_balance, loser_funds, "loser is refunded bid and stake during a pause");
+    assert_eq(winner_balance, winner_funds - winner_bid, "winner gets the earned stake back during a pause");
+    assert_eq(seller_balance, winner_bid - settlement_fee, "seller is paid during a pause");
+    assert_eq(treasury_balance, settlement_fee, "treasury fee is paid during a pause");
+}
+
+
+#[test]
+unconstrained fn late_reveal_refund_still_works_while_paused() {
+    let mut env = TestEnvironment::new();
+    let seller = env.create_light_account();
+    let treasury = env.create_light_account();
+    let guardian_one = env.create_light_account();
+    let guardian_two = env.create_light_account();
+    let guardian_three = env.create_light_account();
+    let bidder = env.create_contract_account();
+    let bid_amount: u128 = 300;
+    let stake_amount = bid_amount * (REAL_ESTATE_STAKE_BPS as u128) / 10_000;
+    let total_locked = bid_amount + stake_amount;
+    let bidder_funds: u128 = 700;
+    let salt: Field = 0x9c06;
+    let token = env.deploy("@private_token/PrivateToken").without_initializer();
+    let auction = env.deploy("@sealed_auction/SealedAuction").with_public_initializer(
+        seller,
+        SealedAuction::interface().constructor(treasury, [guardian_one, guardian_two, guardian_three], 2),
+    );
+    env.call_private(bidder, PrivateToken::at(token).faucet(bidder_funds));
+    let close_timestamp = env.last_block_timestamp() + 1000;
+    let reveal_deadline = close_timestamp + 1000;
+    env.call_public(
+        seller,
+        SealedAuction::at(auction).create_listing(
+            REAL_ESTATE_LISTING_ID,
+            token,
+            100,
+            close_timestamp,
+            reveal_deadline,
+            true,
+            1,
+            REAL_ESTATE_STAKE_BPS,
+            REAL_ESTATE_LEGAL_CLOSING_WINDOW,
+        ),
+    );
+    add_private_authwit_from_call(
+        env,
+        bidder,
+        auction,
+        PrivateToken::at(token).transfer_in_private(bidder, auction, total_locked, TOKEN_AUTHWIT_NONCE),
+    );
+    env.call_private_opts(
+        bidder,
+        CallPrivateOptions::new().with_additional_scopes([auction, token]),
+        SealedAuction::at(auction).commit_bid(REAL_ESTATE_LISTING_ID, bid_amount, salt, TOKEN_AUTHWIT_NONCE),
+    );
+    env.mine_block_at(reveal_deadline + 1);
+    env.call_public(guardian_one, SealedAuction::at(auction).approve_pause());
+    env.call_public(guardian_two, SealedAuction::at(auction).approve_pause());
+    assert(env.call_public(seller, SealedAuction::at(auction).get_paused()), "protocol should be paused here");
+    env.call_private_opts(
+        bidder,
+        CallPrivateOptions::new().with_additional_scopes([auction, token]),
+        SealedAuction::at(auction).claim_late_reveal(REAL_ESTATE_LISTING_ID, bid_amount, salt),
+    );
+    let bidder_balance = env.execute_utility_opts(
+        ExecuteUtilityOptions::new().with_from(bidder),
+        PrivateToken::at(token).balance_of_private(bidder),
+    );
+    let treasury_balance = env.execute_utility_opts(
+        ExecuteUtilityOptions::new().with_from(treasury),
+        PrivateToken::at(token).balance_of_private(treasury),
+    );
+    let penalty = total_locked * 2000 / 10_000;
+    assert_eq(bidder_balance, bidder_funds - total_locked + (total_locked - penalty), "bidder recovers locked funds minus the penalty during a pause");
+    assert_eq(treasury_balance, penalty, "treasury receives the penalty");
 }
