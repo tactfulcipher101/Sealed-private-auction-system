@@ -14,6 +14,89 @@ global BIDDER_A_FUNDS: u128 = 500;
 global BIDDER_B_FUNDS: u128 = 700;
 global TOKEN_AUTHWIT_NONCE: Field = 1;
 
+#[test(should_fail)]
+unconstrained fn untrusted_account_cannot_create_a_verified_listing() {
+    let mut env = TestEnvironment::new();
+    let deployer = env.create_light_account();
+    let treasury = env.create_light_account();
+    let guardian_one = env.create_light_account();
+    let guardian_two = env.create_light_account();
+    let guardian_three = env.create_light_account();
+    let untrusted_account = env.create_light_account();
+
+    let token = env.deploy("@private_token/PrivateToken").without_initializer();
+    let auction = env.deploy("@sealed_auction/SealedAuction").with_public_initializer(
+        deployer,
+        SealedAuction::interface().constructor(treasury, [guardian_one, guardian_two, guardian_three], 2),
+    );
+
+    let close_timestamp = env.last_block_timestamp() + 100;
+    let untrusted_attempts: bool = true;
+    if untrusted_attempts {
+        env.call_public(
+            untrusted_account,
+            SealedAuction::at(auction).create_listing(
+                999,
+                token,
+                100,
+                close_timestamp,
+                close_timestamp + 100,
+                deployer,
+                0,
+                0,
+                0,
+            ),
+        );
+    }
+    if !untrusted_attempts {
+        env.call_public(
+            deployer,
+            SealedAuction::at(auction).create_listing(
+                999,
+                token,
+                100,
+                close_timestamp,
+                close_timestamp + 100,
+                deployer,
+                0,
+                0,
+                0,
+            ),
+        );
+    }
+}
+
+#[test(should_fail)]
+unconstrained fn untrusted_account_cannot_rotate_asset_verifier() {
+    let mut env = TestEnvironment::new();
+    let deployer = env.create_light_account();
+    let treasury = env.create_light_account();
+    let guardian_one = env.create_light_account();
+    let guardian_two = env.create_light_account();
+    let guardian_three = env.create_light_account();
+    let untrusted_account = env.create_light_account();
+    let replacement_verifier = env.create_light_account();
+
+    let auction = env.deploy("@sealed_auction/SealedAuction").with_public_initializer(
+        deployer,
+        SealedAuction::interface().constructor(treasury, [guardian_one, guardian_two, guardian_three], 2),
+    );
+
+    let untrusted_attempts: bool = true;
+    if untrusted_attempts {
+        env.call_public(
+            untrusted_account,
+            SealedAuction::at(auction).update_asset_verifier(replacement_verifier),
+        );
+    }
+    if !untrusted_attempts {
+        env.call_public(
+            deployer,
+            SealedAuction::at(auction).update_asset_verifier(replacement_verifier),
+        );
+    }
+}
+
 #[test]
 unconstrained fn two_bidders_reveal_winner_and_settle_loser_refund() {
     let mut env = TestEnvironment::new();
@@ -44,7 +127,7 @@ unconstrained fn two_bidders_reveal_winner_and_settle_loser_refund() {
             RESERVE,
             close_timestamp,
             reveal_deadline,
-            true,
+            seller,
             0, // category: mobile-goods
             0, // stake_bps
             0, // legal_closing_window
@@ -201,7 +284,7 @@ unconstrained fn late_reveal_forfeits_penalty_to_treasury() {
             reserve,
             close_timestamp,
             reveal_deadline,
-            true,
+            seller,
             0, // category: mobile-goods
             0, // stake_bps
             0, // legal_closing_window
@@ -302,7 +385,7 @@ unconstrained fn real_estate_winner_stake_returns_after_closing_and_loser_gets_b
             reserve_price,
             close_timestamp,
             reveal_deadline,
-            true,
+            seller,
             1, // category: real-estate
             REAL_ESTATE_STAKE_BPS,
             REAL_ESTATE_LEGAL_CLOSING_WINDOW,
@@ -488,7 +571,7 @@ unconstrained fn real_estate_stake_claim_before_closing_confirmation_reverts() {
             100,
             close_timestamp,
             reveal_deadline,
-            true,
+            seller,
             1,
             REAL_ESTATE_STAKE_BPS,
             REAL_ESTATE_LEGAL_CLOSING_WINDOW,
@@ -559,7 +642,7 @@ unconstrained fn relayer_reveals_for_both_bidders_then_normal_claims() {
             RESERVE,
             close_timestamp,
             reveal_deadline,
-            true,
+            seller,
             0,
             0,
             0,
@@ -685,7 +768,7 @@ unconstrained fn reveal_bid_for_wrong_salt_reverts() {
             RESERVE,
             close_timestamp,
             reveal_deadline,
-            true,
+            seller,
             0,
             0,
             0,
@@ -746,7 +829,7 @@ unconstrained fn reveal_bid_for_wrong_amount_reverts() {
             RESERVE,
             close_timestamp,
             reveal_deadline,
-            true,
+            seller,
             0,
             0,
             0,
@@ -807,7 +890,7 @@ unconstrained fn reveal_bid_for_wrong_bidder_reverts() {
             RESERVE,
             close_timestamp,
             reveal_deadline,
-            true,
+            seller,
             0,
             0,
             0,
@@ -867,7 +950,7 @@ unconstrained fn late_reveal_claim_after_relayer_reveal_reverts() {
             RESERVE,
             close_timestamp,
             reveal_deadline,
-            true,
+            seller,
             0,
             0,
             0,
@@ -939,7 +1022,7 @@ unconstrained fn settle_winning_bid_pays_seller_without_winner_then_stake_return
             100,
             close_timestamp,
             reveal_deadline,
-            true,
+            seller,
             1,
             REAL_ESTATE_STAKE_BPS,
             REAL_ESTATE_LEGAL_CLOSING_WINDOW,
@@ -1039,7 +1122,7 @@ unconstrained fn winner_claim_after_permissionless_settle_reverts() {
             100,
             close_timestamp,
             reveal_deadline,
-            true,
+            seller,
             1,
             REAL_ESTATE_STAKE_BPS,
             REAL_ESTATE_LEGAL_CLOSING_WINDOW,
@@ -1116,7 +1199,7 @@ unconstrained fn permissionless_settle_after_winner_claim_reverts() {
             100,
             close_timestamp,
             reveal_deadline,
-            true,
+            seller,
             1,
             REAL_ESTATE_STAKE_BPS,
             REAL_ESTATE_LEGAL_CLOSING_WINDOW,
@@ -1193,7 +1276,7 @@ unconstrained fn slash_after_legal_closing_deadline_pays_stake_to_seller() {
             100,
             close_timestamp,
             reveal_deadline,
-            true,
+            seller,
             1,
             REAL_ESTATE_STAKE_BPS,
             REAL_ESTATE_LEGAL_CLOSING_WINDOW,
@@ -1284,7 +1367,7 @@ unconstrained fn slash_before_legal_closing_deadline_reverts() {
             100,
             close_timestamp,
             reveal_deadline,
-            true,
+            seller,
             1,
             REAL_ESTATE_STAKE_BPS,
             REAL_ESTATE_LEGAL_CLOSING_WINDOW,
@@ -1362,7 +1445,7 @@ unconstrained fn slash_after_confirm_closing_reverts() {
             100,
             close_timestamp,
             reveal_deadline,
-            true,
+            seller,
             1,
             REAL_ESTATE_STAKE_BPS,
             REAL_ESTATE_LEGAL_CLOSING_WINDOW,
@@ -1441,7 +1524,7 @@ unconstrained fn winner_stake_claim_after_slash_reverts() {
             100,
             close_timestamp,
             reveal_deadline,
-            true,
+            seller,
             1,
             REAL_ESTATE_STAKE_BPS,
             REAL_ESTATE_LEGAL_CLOSING_WINDOW,
@@ -1569,7 +1652,7 @@ unconstrained fn paused_commit_bid_reverts() {
             100,
             close_timestamp,
             reveal_deadline,
-            true,
+            seller,
             1,
             REAL_ESTATE_STAKE_BPS,
             REAL_ESTATE_LEGAL_CLOSING_WINDOW,
@@ -1624,7 +1707,7 @@ unconstrained fn paused_reveal_reverts() {
             100,
             close_timestamp,
             reveal_deadline,
-            true,
+            seller,
             1,
             REAL_ESTATE_STAKE_BPS,
             REAL_ESTATE_LEGAL_CLOSING_WINDOW,
@@ -1686,7 +1769,7 @@ unconstrained fn paused_finalize_reverts() {
             100,
             close_timestamp,
             reveal_deadline,
-            true,
+            seller,
             1,
             REAL_ESTATE_STAKE_BPS,
             REAL_ESTATE_LEGAL_CLOSING_WINDOW,
@@ -1749,7 +1832,7 @@ unconstrained fn paused_confirm_closing_reverts() {
             100,
             close_timestamp,
             reveal_deadline,
-            true,
+            seller,
             1,
             REAL_ESTATE_STAKE_BPS,
             REAL_ESTATE_LEGAL_CLOSING_WINDOW,
@@ -1814,7 +1897,7 @@ unconstrained fn paused_slash_reverts() {
             100,
             close_timestamp,
             reveal_deadline,
-            true,
+            seller,
             1,
             REAL_ESTATE_STAKE_BPS,
             REAL_ESTATE_LEGAL_CLOSING_WINDOW,
@@ -1894,7 +1977,7 @@ unconstrained fn payouts_refunds_and_earned_stake_still_work_while_paused() {
             100,
             close_timestamp,
             reveal_deadline,
-            true,
+            seller,
             1,
             REAL_ESTATE_STAKE_BPS,
             REAL_ESTATE_LEGAL_CLOSING_WINDOW,
@@ -2007,7 +2090,7 @@ unconstrained fn late_reveal_refund_still_works_while_paused() {
             100,
             close_timestamp,
             reveal_deadline,
-            true,
+            seller,
             1,
             REAL_ESTATE_STAKE_BPS,
             REAL_ESTATE_LEGAL_CLOSING_WINDOW,
@@ -2074,7 +2157,7 @@ unconstrained fn commit_bid_after_close_reverts() {
             RESERVE,
             close_timestamp,
             reveal_deadline,
-            true,
+            seller,
             0,
             0,
             0,
@@ -2128,7 +2211,7 @@ unconstrained fn double_claim_of_losing_bid_reverts() {
             RESERVE,
             close_timestamp,
             reveal_deadline,
-            true,
+            seller,
             0,
             0,
             0,
@@ -2212,7 +2295,7 @@ unconstrained fn double_claim_of_winning_bid_reverts() {
             RESERVE,
             close_timestamp,
             reveal_deadline,
-            true,
+            seller,
             0,
             0,
             0,
@@ -2289,7 +2372,7 @@ unconstrained fn three_bidders_highest_wins_and_both_others_refunded() {
             RESERVE,
             close_timestamp,
             reveal_deadline,
-            true,
+            seller,
             0,
             0,
             0,
@@ -2413,7 +2496,7 @@ unconstrained fn no_bids_auction_finalizes_with_no_winner() {
             RESERVE,
             close_timestamp,
             reveal_deadline,
-            true,
+            seller,
             0,
             0,
             0,
@@ -2457,7 +2540,7 @@ unconstrained fn nobody_reveals_finalizes_with_no_winner_and_late_claim_refunds(
             RESERVE,
             close_timestamp,
             reveal_deadline,
-            true,
+            seller,
             0,
             0,
             0,
@@ -2531,7 +2614,7 @@ unconstrained fn settle_winning_bid_on_no_winner_auction_reverts() {
             RESERVE,
             close_timestamp,
             reveal_deadline,
-            true,
+            seller,
             0,
             0,
             0,
@@ -2595,7 +2678,7 @@ unconstrained fn losing_claim_on_unrevealed_bid_in_no_winner_auction_reverts() {
             RESERVE,
             close_timestamp,
             reveal_deadline,
-            true,
+            seller,
             0,
             0,
             0,

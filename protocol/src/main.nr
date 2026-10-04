@@ -92,6 +92,7 @@ pub contract SealedAuction {
     #[storage]
     struct Storage<Context> {
         treasury: PublicImmutable<AztecAddress, Context>,
+        asset_verifier: PublicMutable<AztecAddress, Context>,
         listings: Map<Field, PublicImmutable<ListingInfo, Context>, Context>,
         status: Map<Field, PublicMutable<u8, Context>, Context>,
         commitments: Map<Field, Map<u32, PublicMutable<CommitmentRecord, Context>, Context>, Context>,
@@ -118,6 +119,11 @@ pub contract SealedAuction {
     ) {
         assert(!treasury.is_zero(), "treasury cannot be zero");
         self.storage.treasury.initialize(treasury);
+        let asset_verifier = self.context.maybe_msg_sender().expect(
+            f"contract deployer must be an account contract",
+        );
+        assert(!asset_verifier.is_zero(), "asset verifier cannot be zero");
+        self.storage.asset_verifier.write(asset_verifier);
 
         for i in 0..PAUSE_SIGNER_COUNT {
             assert(!pause_guardians[i].is_zero(), "pause guardian cannot be zero");
@@ -141,18 +147,22 @@ pub contract SealedAuction {
         reserve_price: u128,
         close_timestamp: u64,
         reveal_deadline: u64,
-        verified_proof: bool,
+        seller: AztecAddress,
         category: u8,
         stake_bps: u16,
         legal_closing_window: u64,
     ) {
-        let seller = self.context.maybe_msg_sender().expect(
+        let caller = self.context.maybe_msg_sender().expect(
             f"create_listing must be called through an account contract",
         );
+        assert(
+            caller == self.storage.asset_verifier.read(),
+            "only the configured asset verifier may create listings",
+        );
+        assert(!seller.is_zero(), "seller cannot be zero");
         assert(listing_id != 0, "listing id cannot be zero");
         assert(!token.is_zero(), "token cannot be zero");
         assert(reserve_price > 0, "reserve price must be positive");
-        assert(verified_proof, "external asset verification required");
         assert(close_timestamp > self.context.timestamp(), "close time must be in the future");
         assert(reveal_deadline > close_timestamp, "reveal deadline must follow close time");
         assert(self.storage.status.at(listing_id).read() == 0, "listing id already used");
@@ -174,7 +184,7 @@ pub contract SealedAuction {
                 reserve_price,
                 close_timestamp,
                 reveal_deadline,
-                verified: verified_proof,
+                verified: true,
                 category,
                 stake_bps,
                 legal_closing_window,
@@ -189,6 +199,21 @@ pub contract SealedAuction {
         self.storage.closing_confirmed.at(listing_id).write(false);
         self.storage.legal_closing_deadline.at(listing_id).write(0);
         self.emit(ListingCreated { listing_id, seller, token, reserve_price });
+    }
+
+    #[external("public")]
+    fn get_asset_verifier() -> AztecAddress {
+        self.storage.asset_verifier.read()
+    }
+
+    #[external("public")]
+    fn update_asset_verifier(new_verifier: AztecAddress) {
+        let caller = self.context.maybe_msg_sender().expect(
+            f"asset verifier update must be called through an account contract",
+        );
+        assert(caller == self.storage.asset_verifier.read(), "only the current asset verifier can rotate the role");
+        assert(!new_verifier.is_zero(), "asset verifier cannot be zero");
+        self.storage.asset_verifier.write(new_verifier);
     }
 
     /// Bidder-owned note consumption both proves solvency and locks exactly the
