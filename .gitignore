@@ -6,3 +6,5 @@ mutation_*.txt
 test_output_clean.txt
 targeted_*.txt
 baseline_test_output.txt
+frontend/AGENTS.md
+frontend/CLAUDE.md
