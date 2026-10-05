@@ -3038,3 +3038,59 @@ unconstrained fn claim_late_reveal_from_note_refunds_minus_penalty() {
     assert_eq(bidder_balance, 678);
     assert_eq(treasury_balance, 22);
 }
+#[test]
+unconstrained fn slash_after_pause_before_finalize_is_not_extended() {
+    let mut env = TestEnvironment::new();
+    let seller = env.create_light_account();
+    let treasury = env.create_light_account();
+    let guardian_one = env.create_light_account();
+    let guardian_two = env.create_light_account();
+    let guardian_three = env.create_light_account();
+    let bidder = env.create_contract_account();
+    let relayer = env.create_light_account();
+    let token = env.deploy("@private_token/PrivateToken").without_initializer();
+    let auction = env.deploy("@sealed_auction/SealedAuction").with_public_initializer(
+        seller,
+        SealedAuction::interface().constructor(treasury, seller, [guardian_one, guardian_two, guardian_three], 2, 300, 2000, 10000),
+    );
+    let bid_amount: u128 = 300;
+    let stake_amount = bid_amount / 10;
+    env.call_private(bidder, PrivateToken::at(token).faucet(700));
+    let close_timestamp = env.last_block_timestamp() + 1000;
+    let reveal_deadline = close_timestamp + 1000;
+    env.call_public(seller, SealedAuction::at(auction).create_listing(
+        7099, token, 100, close_timestamp, reveal_deadline, seller, 1, 1000, 1000,
+    ));
+    add_private_authwit_from_call(
+        env, bidder, auction,
+        PrivateToken::at(token).transfer_in_private(bidder, auction, bid_amount + stake_amount, TOKEN_AUTHWIT_NONCE),
+    );
+    env.call_private_opts(
+        bidder, CallPrivateOptions::new().with_additional_scopes([auction, token]),
+        SealedAuction::at(auction).commit_bid(7099, bid_amount, 0x7099, TOKEN_AUTHWIT_NONCE),
+    );
+    let commit_time = env.last_block_timestamp();
+    env.mine_block_at(commit_time + 100);
+    env.call_public(guardian_one, SealedAuction::at(auction).approve_pause());
+    env.call_public(guardian_two, SealedAuction::at(auction).approve_pause());
+    env.mine_block_at(commit_time + 600);
+    env.call_public(guardian_one, SealedAuction::at(auction).approve_unpause());
+    env.call_public(guardian_two, SealedAuction::at(auction).approve_unpause());
+    env.mine_block_at(close_timestamp + 1);
+    env.call_public(seller, SealedAuction::at(auction).close_auction(7099));
+    env.call_private_opts(
+        bidder, CallPrivateOptions::new().with_additional_scopes([auction]),
+        SealedAuction::at(auction).reveal_bid(7099),
+    );
+    env.call_public(seller, SealedAuction::at(auction).finalize_settlement(7099));
+    env.call_private_opts(
+        relayer, CallPrivateOptions::new().with_additional_scopes([auction, token]),
+        SealedAuction::at(auction).settle_winning_bid(7099, bid_amount),
+    );
+    let finalize_time = env.last_block_timestamp();
+    env.mine_block_at(finalize_time + 1100);
+    env.call_private_opts(
+        relayer, CallPrivateOptions::new().with_additional_scopes([auction, token]),
+        SealedAuction::at(auction).slash_stake_for_default(7099, bid_amount),
+    );
+}
