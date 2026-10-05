@@ -8,7 +8,7 @@ The protocol separates private bid discovery from identity, custody, legal trans
 
 Open auctions expose more than the final price. During bidding, competitors can often observe price movements, infer a bidder's budget, identify participants, and use that information to shape the next bid. Sellers may also be forced to publicly associate themselves with a liquidation, estate sale, corporate wind-down, or other sensitive transaction.
 
-Sealed addresses this information problem by keeping bids committed and hidden until the auction closes. The protocol does not attempt to make the entire transaction anonymous. Instead, it limits unnecessary disclosure during competitive bidding and reveals the information needed for settlement and lawful delivery at the appropriate point.
+Sealed addresses this information problem by keeping bids committed and hidden until the auction closes. The protocol does not hide the whole transaction. Instead, it limits unnecessary disclosure during competitive bidding and reveals the information needed for settlement and lawful delivery at the appropriate point.
 
 ## Protocol Goals
 
@@ -16,7 +16,7 @@ Sealed addresses this information problem by keeping bids committed and hidden u
 - Keep bidder wallet addresses hidden from competitors and public observers during bidding.
 - Verify that a bidder can support an intended bid without exposing total wallet holdings.
 - Select the highest valid bid deterministically at close.
-- Return losing bid funds without relying on a manual claim process.
+- Make losing bid funds claimable by their owner after settlement.
 - Support different regulated settlement currencies and regional verification partners.
 - Separate software-based bid privacy from legal identity, custody, and physical delivery requirements.
 
@@ -66,7 +66,7 @@ The highest valid bid wins according to the published auction rules. A productio
 
 ### 5. Settlement and Refunds
 
-The winning bid is transferred according to the settlement rules. Losing bid funds are unlocked and returned directly to their owners. The seller and winning bidder then move into the appropriate legal, custody, title-transfer, and delivery workflow.
+The winner or a permissionless settler can pay the seller and treasury according to the settlement rules. Losing bidders must submit a claim transaction to recover their locked funds. The seller and winning bidder then move into the appropriate legal, custody, title-transfer, and delivery workflow.
 
 The protocol's privacy boundary changes at this point. The winning bidder may need to disclose identity for a deed, invoice, courier waybill, tax record, regulated custody release, or other legal instrument. This is not a failure of private bidding; it is the point at which disclosure becomes necessary for completion.
 
@@ -93,7 +93,7 @@ The winning bidder reference shown during settlement is a protocol-level wallet 
 
 ### What Sealed Does Not Promise
 
-- Fiat-to-crypto or stablecoin on-ramps are not automatically anonymous and may be subject to KYC.
+- Fiat-to-crypto or stablecoin on-ramps can tie your identity to your funds and may be subject to KYC.
 - Blockchain network metadata, wallet reuse, timing, and external systems can create linkability risks.
 - A winning bidder cannot remain unidentified when legal ownership, delivery, tax, custody, or title requirements demand identification.
 - Physical asset verification still requires trusted people and institutions in the relevant jurisdiction.
@@ -143,7 +143,9 @@ The accompanying web experience illustrates the protocol lifecycle through four 
 - `/demo` walks through wallet connection, listing, bidding, live auction, and reveal-at-close settlement.
 - `/protocol` provides the longer technical explanation of the privacy model and auction phases.
 
-The demonstration uses local browser state and simulated data. Refreshing the page resets the session; no real wallet, contract, escrow, identity provider, or verification partner is contacted.
+The demo can connect to a real Aztec browser wallet if the selected network node URL is configured. Wallet discovery is matched to that node's chain identity and requires explicit verification of the secure connection phrase. A configured asset-verifier wallet can create listings on-chain after confirming its operator attestation. Existing catalog entries, bidding, settlement, token escrow, and partner verification remain simulated or unimplemented. Refreshing the page resets local demo state.
+
+The `/deploy` page deploys the test-only `PrivateToken` and auction artifacts using the connected wallet, then displays an env snippet with generated deployment addresses. Compile the root Noir workspace first. Deployment is blocked if the node runtime version differs from the artifact version. The connected account must already have Fee Juice; this frontend does not attach the Sponsored FPC payment method.
 
 ## Disclaimer
 
