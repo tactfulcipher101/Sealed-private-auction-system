@@ -75,6 +75,17 @@ export function configuredAddress(value: string | null, label: string) {
   }
 }
 
+interface SealedAuctionMethods {
+  get_asset_verifier: () => {
+    simulate: (options: { from: AztecAddress }) => Promise<{ result: unknown }>;
+  };
+  create_listing: (...args: unknown[]) => {
+    send: (options: { from: AztecAddress }) => Promise<{
+      receipt: { hasExecutionSucceeded: () => boolean; error?: string; txHash: { toString: () => string } };
+    }>;
+  };
+}
+
 export async function getAssetVerifier(connection: ConnectedAztecWallet): Promise<AztecAddress> {
   await assertSealedAuctionFunction("get_asset_verifier");
   const config = getNetworkConfig();
@@ -82,7 +93,7 @@ export async function getAssetVerifier(connection: ConnectedAztecWallet): Promis
   const connectedAddress = configuredAddress(connection.address, "Connected account");
   const artifact = await getSealedAuctionArtifact();
   const auction = Contract.at(auctionAddress, artifact, connection.wallet);
-  const result = await (auction.methods as Record<string, any>).get_asset_verifier().simulate({ from: connectedAddress });
+  const result = await (auction.methods as unknown as SealedAuctionMethods).get_asset_verifier().simulate({ from: connectedAddress });
   return AztecAddress.schema.parse(result.result);
 }
 
@@ -136,7 +147,7 @@ export async function createVerifiedListing(
   const listingId = Fr.random();
   const categoryId = input.category === "real-estate" ? 1 : 0;
   const auction = Contract.at(auctionAddress, artifact, connection.wallet);
-  const { receipt } = await (auction.methods as Record<string, any>).create_listing(
+  const { receipt } = await (auction.methods as unknown as SealedAuctionMethods).create_listing(
     listingId,
     tokenAddress,
     BigInt(input.reservePrice),
