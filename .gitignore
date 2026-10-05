@@ -2,3 +2,7 @@
 *_output.txt
 
 target/
+mutation_*.txt
+test_output_clean.txt
+targeted_*.txt
+baseline_test_output.txt
