@@ -16,7 +16,7 @@ use aztec::macros::aztec;
 
 #[aztec]
 pub contract SealedAuction {
-    use crate::bid_note::{bid_commitment_hash, BidCommitmentNote, note_key};
+    use crate::bid_note::{BidCommitmentNote, note_key};
     use aztec::{
         macros::{
             events::event,
@@ -33,19 +33,14 @@ pub contract SealedAuction {
     global STATUS_REVEAL_WINDOW: u8 = 2;
     global STATUS_SETTLED: u8 = 3;
     global MAX_BIDS_PER_LISTING: u32 = 32;
-    global SETTLEMENT_FEE_BPS: u128 = 300; // Placeholder: 3%, pending unit-economics review.
-    global LATE_REVEAL_PENALTY_BPS: u128 = 2000; // Placeholder: 20%, pending real economic decision.
     global BPS_DENOMINATOR: u128 = 10_000;
     global CATEGORY_MOBILE_GOODS: u8 = 0;
     global CATEGORY_REAL_ESTATE: u8 = 1;
-    // Share of a slashed real-estate stake paid to the seller; the remainder
-    // goes to treasury. 10_000 = 100% to the seller.
-    global SLASH_SELLER_SHARE_BPS: u128 = 10_000;
     global PAUSE_SIGNER_COUNT: u32 = 3;
     // Vote slots 0..3 hold pause votes, slots 3..6 hold unpause votes.
     global PAUSE_VOTE_SLOTS: u32 = 6;
 
-    #[derive(Eq, Packable)]
+    #[derive(Deserialize, Eq, Packable, Serialize)]
     pub struct ListingInfo {
         pub seller: AztecAddress,
         pub token: AztecAddress,
@@ -62,6 +57,27 @@ pub contract SealedAuction {
         /// legal closing before the stake becomes eligible for slashing.
         /// Unused for mobile-goods listings.
         pub legal_closing_window: u64,
+    }
+
+    #[derive(Deserialize, Eq, Packable, Serialize)]
+    pub struct ClosingState {
+        pub closing_confirmed: bool,
+        pub legal_closing_deadline: u64,
+        pub stake_claimed: bool,
+    }
+
+    #[derive(Deserialize, Eq, Packable, Serialize)]
+    pub struct ProtocolParameters {
+        pub settlement_fee_bps: u128,
+        pub late_reveal_penalty_bps: u128,
+        pub slash_seller_share_bps: u128,
+        pub treasury: AztecAddress,
+    }
+
+    #[derive(Deserialize, Eq, Packable, Serialize)]
+    pub struct EffectiveDeadlines {
+        pub reveal_deadline: u64,
+        pub legal_closing_deadline: u64,
     }
 
     #[derive(Deserialize, Eq, Packable, Serialize)]
@@ -91,7 +107,7 @@ pub contract SealedAuction {
 
     #[storage]
     struct Storage<Context> {
-        treasury: PublicImmutable<AztecAddress, Context>,
+        parameters: PublicImmutable<ProtocolParameters, Context>,
         asset_verifier: PublicMutable<AztecAddress, Context>,
         listings: Map<Field, PublicImmutable<ListingInfo, Context>, Context>,
         status: Map<Field, PublicMutable<u8, Context>, Context>,
@@ -107,6 +123,10 @@ pub contract SealedAuction {
         pause_threshold: PublicImmutable<u8, Context>,
         guardian_votes: Map<u32, PublicMutable<bool, Context>, Context>,
         paused: PublicMutable<bool, Context>,
+        paused_seconds_total: PublicMutable<u64, Context>,
+        paused_since: PublicMutable<u64, Context>,
+        pause_clock_at_listing: Map<Field, PublicMutable<u64, Context>, Context>,
+        pause_clock_at_finalize: Map<Field, PublicMutable<u64, Context>, Context>,
         bid_notes: Map<Field, Owned<PrivateMutable<BidCommitmentNote, Context>, Context>, Context>,
     }
 
@@ -114,17 +134,30 @@ pub contract SealedAuction {
     #[external("public")]
     fn constructor(
         treasury: AztecAddress,
+        asset_verifier: AztecAddress,
         pause_guardians: [AztecAddress; 3],
         pause_threshold: u8,
+        settlement_fee_bps: u128,
+        late_reveal_penalty_bps: u128,
+        slash_seller_share_bps: u128,
     ) {
         assert(!treasury.is_zero(), "treasury cannot be zero");
-        self.storage.treasury.initialize(treasury);
-        let asset_verifier = self.context.maybe_msg_sender().expect(
-            f"contract deployer must be an account contract",
-        );
+
         assert(!asset_verifier.is_zero(), "asset verifier cannot be zero");
         self.storage.asset_verifier.write(asset_verifier);
-
+        assert(settlement_fee_bps <= 1000, "settlement fee exceeds 1000 basis points");
+        assert(late_reveal_penalty_bps <= 5000, "late reveal penalty exceeds 5000 basis points");
+        assert(slash_seller_share_bps <= 10_000, "slash seller share exceeds 10000 basis points");
+        self.storage.parameters.initialize(
+            ProtocolParameters {
+                settlement_fee_bps,
+                late_reveal_penalty_bps,
+                slash_seller_share_bps,
+                treasury,
+            },
+        );
+        self.storage.paused_seconds_total.write(0);
+        self.storage.paused_since.write(0);
         for i in 0..PAUSE_SIGNER_COUNT {
             assert(!pause_guardians[i].is_zero(), "pause guardian cannot be zero");
             self.storage.pause_signers.at(i).initialize(pause_guardians[i]);
@@ -133,10 +166,7 @@ pub contract SealedAuction {
         assert(pause_guardians[0] != pause_guardians[2], "pause guardians must be distinct");
         assert(pause_guardians[1] != pause_guardians[2], "pause guardians must be distinct");
         assert(pause_threshold >= 1, "pause threshold must be at least 1");
-        assert(
-            (pause_threshold as u32) <= PAUSE_SIGNER_COUNT,
-            "pause threshold exceeds guardian count",
-        );
+        assert((pause_threshold as u32) <= PAUSE_SIGNER_COUNT, "pause threshold exceeds guardian count");
         self.storage.pause_threshold.initialize(pause_threshold);
     }
 
@@ -177,6 +207,11 @@ pub contract SealedAuction {
             assert(stake_bps == 0, "mobile-goods listings cannot require a stake");
         }
 
+        let timestamp = self.context.timestamp();
+        let mut clock = self.storage.paused_seconds_total.read();
+        if self.storage.paused.read() {
+            clock += timestamp - self.storage.paused_since.read();
+        }
         self.storage.listings.at(listing_id).initialize(
             ListingInfo {
                 seller,
@@ -198,7 +233,60 @@ pub contract SealedAuction {
         );
         self.storage.closing_confirmed.at(listing_id).write(false);
         self.storage.legal_closing_deadline.at(listing_id).write(0);
+        self.storage.pause_clock_at_listing.at(listing_id).write(clock);
         self.emit(ListingCreated { listing_id, seller, token, reserve_price });
+    }
+
+
+
+    #[external("public")]
+    fn get_listing(listing_id: Field) -> pub ListingInfo {
+        self.storage.listings.at(listing_id).read()
+    }
+
+    #[external("public")]
+    fn get_status(listing_id: Field) -> u8 {
+        self.storage.status.at(listing_id).read()
+    }
+
+    #[external("public")]
+    fn get_closing_state(listing_id: Field) -> pub ClosingState {
+        ClosingState {
+            closing_confirmed: self.storage.closing_confirmed.at(listing_id).read(),
+            legal_closing_deadline: self.storage.legal_closing_deadline.at(listing_id).read(),
+            stake_claimed: self.storage.stake_claimed.at(listing_id).read(),
+        }
+    }
+
+    #[external("public")]
+    fn get_parameters() -> pub ProtocolParameters {
+        ProtocolParameters {
+            settlement_fee_bps: self.storage.parameters.read().settlement_fee_bps,
+            late_reveal_penalty_bps: self.storage.parameters.read().late_reveal_penalty_bps,
+            slash_seller_share_bps: self.storage.parameters.read().slash_seller_share_bps,
+            treasury: self.storage.parameters.read().treasury,
+        }
+    }
+
+    #[external("public")]
+    fn get_effective_deadlines(listing_id: Field) -> pub EffectiveDeadlines {
+        let timestamp = self.context.timestamp();
+        let mut clock = self.storage.paused_seconds_total.read();
+        if self.storage.paused.read() {
+            clock += timestamp - self.storage.paused_since.read();
+        }
+        let listing = self.storage.listings.at(listing_id).read();
+        let stored_legal_deadline = self.storage.legal_closing_deadline.at(listing_id).read();
+        let mut legal_closing_deadline = 0;
+        if stored_legal_deadline > 0 {
+            legal_closing_deadline = stored_legal_deadline
+                + (clock - self.storage.pause_clock_at_finalize.at(listing_id).read());
+        }
+        EffectiveDeadlines {
+            reveal_deadline: listing.reveal_deadline
+                + (clock - self.storage.pause_clock_at_listing.at(listing_id).read()),
+            legal_closing_deadline,
+        }
     }
 
     #[external("public")]
@@ -240,7 +328,7 @@ pub contract SealedAuction {
 
         let commitment_hash = crate::bid_note::bid_commitment_hash(amount, salt, bidder);
         let enrollment_key = crate::bid_note::note_key(bidder, listing_id);
-        let note = BidCommitmentNote::new(listing_id, commitment_hash, amount, stake);
+        let note = BidCommitmentNote::new(listing_id, commitment_hash, salt, amount, stake);
         self.storage.bid_notes.at(enrollment_key).at(bidder).initialize(note).deliver(
             MessageDelivery::onchain_unconstrained(),
         );
@@ -265,31 +353,26 @@ pub contract SealedAuction {
         self.storage.status.at(listing_id).write(STATUS_REVEAL_WINDOW);
     }
 
-    /// A bidder reveals their own note. This call publishes amount and hash,
-    /// then queues public indexing; it is not a blind or MPC settlement.
+    /// A bidder reveals the amount and salt stored in their own note.
     #[external("private")]
-    fn reveal_bid(listing_id: Field, amount: u128, salt: Field) {
+    fn reveal_bid(listing_id: Field) {
         let bidder = self.context.maybe_msg_sender().expect(
             f"reveal_bid must be called through an account contract",
         );
         let listing = self.storage.listings.at(listing_id).read();
         let now = self.context.get_anchor_block_header().timestamp();
         assert(now >= listing.close_timestamp, "auction has not closed");
-        assert(now <= listing.reveal_deadline, "reveal deadline passed");
-
         let enrollment_key = crate::bid_note::note_key(bidder, listing_id);
         let slot = self.storage.bid_notes.at(enrollment_key).at(bidder);
         let note = slot.get_note().get_note();
         assert(!note.revealed, "bid already revealed");
         assert(!note.bid_settled, "bid already settled");
-        let expected_hash = crate::bid_note::bid_commitment_hash(amount, salt, bidder);
+        let expected_hash = crate::bid_note::bid_commitment_hash(note.locked_bid, note.salt, bidder);
         assert(expected_hash == note.commitment_hash, "reveal does not match commitment");
-        assert(amount == note.locked_bid, "revealed amount differs from locked amount");
-
         slot.replace(|current| current.after_reveal()).deliver(
             MessageDelivery::onchain_unconstrained(),
         );
-        self.enqueue_self._record_reveal(listing_id, note.commitment_hash, amount);
+        self.enqueue_self._record_reveal(listing_id, note.commitment_hash, note.locked_bid);
     }
 
     /// Anyone may reveal a bid on the bidder's behalf, provided they know the
@@ -304,7 +387,6 @@ pub contract SealedAuction {
         let listing = self.storage.listings.at(listing_id).read();
         let now = self.context.get_anchor_block_header().timestamp();
         assert(now >= listing.close_timestamp, "auction has not closed");
-        assert(now <= listing.reveal_deadline, "reveal deadline passed");
 
         let commitment_hash = crate::bid_note::bid_commitment_hash(amount, salt, bidder);
         self.enqueue_self._record_reveal(listing_id, commitment_hash, amount);
@@ -322,8 +404,11 @@ pub contract SealedAuction {
         );
         let count = self.storage.commitment_count.at(listing_id).read();
         let reveals = self.storage.revealed_count.at(listing_id).read();
+        let reveal_deadline = listing.reveal_deadline
+            + (self.storage.paused_seconds_total.read()
+                - self.storage.pause_clock_at_listing.at(listing_id).read());
         assert(
-            (self.context.timestamp() >= listing.reveal_deadline)
+            (self.context.timestamp() >= reveal_deadline)
                 | ((count > 0) & (count == reveals)),
             "reveal window is still active",
         );
@@ -368,6 +453,12 @@ pub contract SealedAuction {
             self.storage.legal_closing_deadline.at(listing_id).write(
                 self.context.timestamp() + listing.legal_closing_window,
             );
+            let finalize_timestamp = self.context.timestamp();
+            let mut finalize_clock = self.storage.paused_seconds_total.read();
+            if self.storage.paused.read() {
+                finalize_clock += finalize_timestamp - self.storage.paused_since.read();
+            }
+            self.storage.pause_clock_at_finalize.at(listing_id).write(finalize_clock);
         }
         self.storage.status.at(listing_id).write(STATUS_SETTLED);
     }
@@ -418,6 +509,15 @@ pub contract SealedAuction {
             }
         }
         if vote_count >= self.storage.pause_threshold.read() {
+            let timestamp = self.context.timestamp();
+            if want_paused {
+                self.storage.paused_since.write(timestamp);
+            } else {
+                self.storage.paused_seconds_total.write(
+                    self.storage.paused_seconds_total.read()
+                        + timestamp - self.storage.paused_since.read(),
+                );
+            }
             self.storage.paused.write(want_paused);
             for i in 0..PAUSE_VOTE_SLOTS {
                 self.storage.guardian_votes.at(i).write(false);
@@ -459,9 +559,9 @@ pub contract SealedAuction {
         // The note can still say unrevealed if a relayer used reveal_bid_for.
         assert(!note.bid_settled, "bid already claimed");
         self.enqueue_self._mark_winner_claim(listing_id, note.commitment_hash);
-        let fee = note.locked_bid * SETTLEMENT_FEE_BPS / BPS_DENOMINATOR;
+        let fee = note.locked_bid * self.storage.parameters.read().settlement_fee_bps / BPS_DENOMINATOR;
         self.call(PrivateToken::at(listing.token).transfer(listing.seller, note.locked_bid - fee));
-        self.call(PrivateToken::at(listing.token).transfer(self.storage.treasury.read(), fee));
+        self.call(PrivateToken::at(listing.token).transfer(self.storage.parameters.read().treasury, fee));
         // The stake (if any) stays locked here; real-estate winners claim it
         // separately via claim_stake_after_closing, once the seller confirms
         // legal closing. Mobile-goods bids have no stake, so stake_resolved
@@ -501,7 +601,7 @@ pub contract SealedAuction {
     /// they lost has no reason to ever reveal, and the reveal-at-close
     /// mechanism can stall with no winner determinable.
     #[external("private")]
-    fn claim_late_reveal(listing_id: Field, amount: u128, salt: Field) {
+    fn claim_late_reveal(listing_id: Field) {
         let bidder = self.context.maybe_msg_sender().expect(
             f"claim_late_reveal must be called through an account contract",
         );
@@ -514,18 +614,17 @@ pub contract SealedAuction {
         let note = slot.get_note().get_note();
         assert(!note.revealed, "bid was revealed on time; use the normal claim path");
         assert(!note.bid_settled, "bid already settled");
-        let expected_hash = crate::bid_note::bid_commitment_hash(amount, salt, bidder);
+        let expected_hash = crate::bid_note::bid_commitment_hash(note.locked_bid, note.salt, bidder);
         assert(expected_hash == note.commitment_hash, "claim does not match commitment");
-        assert(amount == note.locked_bid, "claimed amount differs from locked amount");
         // Public gate: the record must be unrevealed and unclaimed, and the
         // deadline must have passed. Closes the relayer-reveal loophole.
         self.enqueue_self._mark_late_claim(listing_id, note.commitment_hash);
 
         let total_locked = note.locked_bid + note.locked_stake;
-        let penalty = total_locked * LATE_REVEAL_PENALTY_BPS / BPS_DENOMINATOR;
+        let penalty = total_locked * self.storage.parameters.read().late_reveal_penalty_bps / BPS_DENOMINATOR;
         let refund = total_locked - penalty;
         self.call(PrivateToken::at(listing.token).transfer(bidder, refund));
-        self.call(PrivateToken::at(listing.token).transfer(self.storage.treasury.read(), penalty));
+        self.call(PrivateToken::at(listing.token).transfer(self.storage.parameters.read().treasury, penalty));
         slot.replace(|current| current.after_full_settlement()).deliver(
             MessageDelivery::onchain_unconstrained(),
         );
@@ -584,9 +683,9 @@ pub contract SealedAuction {
     fn settle_winning_bid(listing_id: Field, winning_amount: u128) {
         let listing = self.storage.listings.at(listing_id).read();
         self.enqueue_self._mark_settle_winner(listing_id, winning_amount);
-        let fee = winning_amount * SETTLEMENT_FEE_BPS / BPS_DENOMINATOR;
+        let fee = winning_amount * self.storage.parameters.read().settlement_fee_bps / BPS_DENOMINATOR;
         self.call(PrivateToken::at(listing.token).transfer(listing.seller, winning_amount - fee));
-        self.call(PrivateToken::at(listing.token).transfer(self.storage.treasury.read(), fee));
+        self.call(PrivateToken::at(listing.token).transfer(self.storage.parameters.read().treasury, fee));
     }
 
     /// Anyone may slash a real-estate winner who missed the legal closing
@@ -599,12 +698,12 @@ pub contract SealedAuction {
         let stake = winning_amount * (listing.stake_bps as u128) / BPS_DENOMINATOR;
         assert(stake > 0, "no stake locked for this listing");
         self.enqueue_self._mark_slash(listing_id, winning_amount);
-        let seller_share = stake * SLASH_SELLER_SHARE_BPS / BPS_DENOMINATOR;
+        let seller_share = stake * self.storage.parameters.read().slash_seller_share_bps / BPS_DENOMINATOR;
         self.call(PrivateToken::at(listing.token).transfer(listing.seller, seller_share));
-        if SLASH_SELLER_SHARE_BPS < BPS_DENOMINATOR {
+        if self.storage.parameters.read().slash_seller_share_bps < BPS_DENOMINATOR {
             self.call(
                 PrivateToken::at(listing.token).transfer(
-                    self.storage.treasury.read(),
+                    self.storage.parameters.read().treasury,
                     stake - seller_share,
                 ),
             );
@@ -641,7 +740,12 @@ pub contract SealedAuction {
             self.storage.status.at(listing_id).read() == STATUS_REVEAL_WINDOW,
             "auction is not in reveal window",
         );
-        assert(self.context.timestamp() <= listing.reveal_deadline, "reveal deadline passed");
+        assert(
+            self.context.timestamp() <= listing.reveal_deadline
+                + (self.storage.paused_seconds_total.read()
+                    - self.storage.pause_clock_at_listing.at(listing_id).read()),
+            "reveal deadline passed",
+        );
         let count = self.storage.commitment_count.at(listing_id).read();
         let mut index = 0;
         let mut found = false;
@@ -688,8 +792,14 @@ pub contract SealedAuction {
     #[external("public")]
     fn _mark_late_claim(listing_id: Field, commitment_hash: Field) {
         let listing = self.storage.listings.at(listing_id).read();
+        let timestamp = self.context.timestamp();
+        let mut clock = self.storage.paused_seconds_total.read();
+        if self.storage.paused.read() {
+            clock += timestamp - self.storage.paused_since.read();
+        }
         assert(
-            self.context.timestamp() > listing.reveal_deadline,
+            timestamp > listing.reveal_deadline
+                + (clock - self.storage.pause_clock_at_listing.at(listing_id).read()),
             "reveal deadline has not passed yet",
         );
         let count = self.storage.commitment_count.at(listing_id).read();
@@ -790,7 +900,10 @@ pub contract SealedAuction {
         let winner_record = self.storage.commitments.at(listing_id).at(index).read();
         assert(winner_record.is_winner & winner_record.claimed, "winning bid has not been paid out");
         assert(
-            self.context.timestamp() > self.storage.legal_closing_deadline.at(listing_id).read(),
+            self.context.timestamp()
+                > self.storage.legal_closing_deadline.at(listing_id).read()
+                    + (self.storage.paused_seconds_total.read()
+                        - self.storage.pause_clock_at_finalize.at(listing_id).read()),
             "legal closing deadline has not passed",
         );
         assert(!self.storage.closing_confirmed.at(listing_id).read(), "closing was confirmed");

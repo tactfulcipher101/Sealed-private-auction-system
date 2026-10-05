@@ -14,6 +14,7 @@ pub fn bid_commitment_hash(amount: u128, salt: Field, bidder: AztecAddress) -> F
 pub struct BidCommitmentNote {
     pub listing_id: Field,
     pub commitment_hash: Field,
+    pub salt: Field,
     pub locked_bid: u128,
     /// Real-estate commitment stake, locked alongside the bid. Zero for
     /// mobile-goods listings.
@@ -31,12 +32,14 @@ impl BidCommitmentNote {
     pub fn new(
         listing_id: Field,
         commitment_hash: Field,
+        salt: Field,
         locked_bid: u128,
         locked_stake: u128,
     ) -> Self {
         Self {
             listing_id,
             commitment_hash,
+            salt,
             locked_bid,
             locked_stake,
             revealed: false,
@@ -49,6 +52,7 @@ impl BidCommitmentNote {
         Self {
             listing_id: self.listing_id,
             commitment_hash: self.commitment_hash,
+            salt: self.salt,
             locked_bid: self.locked_bid,
             locked_stake: self.locked_stake,
             revealed: true,
@@ -61,6 +65,7 @@ impl BidCommitmentNote {
         Self {
             listing_id: self.listing_id,
             commitment_hash: self.commitment_hash,
+            salt: self.salt,
             locked_bid: self.locked_bid,
             locked_stake: self.locked_stake,
             revealed: self.revealed,
@@ -73,6 +78,7 @@ impl BidCommitmentNote {
         Self {
             listing_id: self.listing_id,
             commitment_hash: self.commitment_hash,
+            salt: self.salt,
             locked_bid: self.locked_bid,
             locked_stake: self.locked_stake,
             revealed: self.revealed,
@@ -85,6 +91,7 @@ impl BidCommitmentNote {
         Self {
             listing_id: self.listing_id,
             commitment_hash: self.commitment_hash,
+            salt: self.salt,
             locked_bid: self.locked_bid,
             locked_stake: self.locked_stake,
             revealed: self.revealed,
