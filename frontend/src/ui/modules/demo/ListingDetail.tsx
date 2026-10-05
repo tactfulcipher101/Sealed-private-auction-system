@@ -50,7 +50,19 @@ export function ListingDetail({ listing, isOwnListing, onEnterBidding, onBack }:
         </div>
       </div>
 
-      {isOwnListing ? (
+      {listing.onChain ? (
+        <div className="space-y-2 rounded-lg border border-emerald-500/25 bg-emerald-500/5 p-4">
+          <p className="text-xs leading-relaxed text-emerald-100/80">
+            This listing was created on-chain. Bid submission and auction monitoring for deployed listings are not connected in this frontend yet.
+          </p>
+          <p className="text-[11px] leading-5 text-slate-400">
+            The descriptive metadata shown here is local to this browser session; it is not stored in the auction contract.
+          </p>
+          {listing.transactionHash && (
+            <p className="break-all font-mono text-[10px] text-emerald-200/70">Transaction {listing.transactionHash}</p>
+          )}
+        </div>
+      ) : isOwnListing ? (
         <div className="p-4 rounded-lg bg-slate-950 border border-slate-800/80 flex items-start gap-3">
           <Ban className="h-4 w-4 text-rose-400 shrink-0 mt-0.5" />
           <p className="text-xs text-slate-400 leading-relaxed">
@@ -70,10 +82,11 @@ export function ListingDetail({ listing, isOwnListing, onEnterBidding, onBack }:
 
       <button
         onClick={onEnterBidding}
-        className="w-full py-3 bg-slate-100 text-slate-950 text-sm font-medium rounded-lg hover:bg-white transition-all flex items-center justify-center gap-2"
+        disabled={listing.onChain}
+        className="w-full py-3 bg-slate-100 text-slate-950 text-sm font-medium rounded-lg hover:bg-white disabled:cursor-not-allowed disabled:opacity-50 transition-all flex items-center justify-center gap-2"
       >
         <ShieldCheck className="h-4 w-4" />
-        <span>{isOwnListing ? "Monitor auction" : "Enter private bidding"}</span>
+        <span>{listing.onChain ? "Bidding not connected" : isOwnListing ? "Monitor auction" : "Enter private bidding"}</span>
       </button>
     </div>
   );

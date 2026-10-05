@@ -4,6 +4,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { ArrowLeft, Cpu, Lock } from "lucide-react";
 import type { Listing, SimulatedBid } from "@/lib/demoData";
 import { generateWalletAddress, generateCommitmentHash } from "@/lib/demoCrypto";
+import { calculateStake, isBidValid } from "@/lib/auctionLogic";
 
 interface BidCommitFormProps {
   listing: Listing;
@@ -12,16 +13,19 @@ interface BidCommitFormProps {
 }
 
 const PROOF_STAGES = [
-  "Checking wallet balance on-device...",
-  "Generating solvency proof...",
-  "Encrypting bid commitment...",
-  "Locking funds into escrow...",
+  "Demo: checking sample balance...",
+  "Demo: generating solvency proof...",
+  "Demo: creating bid commitment...",
+  "Demo: simulating escrow lock...",
 ];
 
 export function BidCommitForm({ listing, onBidCommitted, onCancel }: BidCommitFormProps) {
   const [amount, setAmount] = useState("");
   const [isProving, setIsProving] = useState(false);
   const [stageIndex, setStageIndex] = useState(0);
+  const parsedAmount = Number(amount);
+  const validBid = isBidValid(parsedAmount, listing.reservePrice);
+  const stake = validBid ? calculateStake(parsedAmount, listing.stakeBps) : 0;
 
   useEffect(() => {
     if (!isProving) return;
@@ -32,8 +36,7 @@ export function BidCommitForm({ listing, onBidCommitted, onCancel }: BidCommitFo
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    const parsedAmount = Number(amount);
-    if (!parsedAmount || parsedAmount <= 0) return;
+    if (!isBidValid(parsedAmount, listing.reservePrice)) return;
 
     setIsProving(true);
     setStageIndex(0);
@@ -61,7 +64,7 @@ export function BidCommitForm({ listing, onBidCommitted, onCancel }: BidCommitFo
       </button>
 
       <div className="space-y-2">
-        <h2 className="text-xl font-bold text-slate-100">Place a sealed bid</h2>
+        <h2 className="text-xl font-bold text-slate-100">Preview a sealed bid</h2>
         <p className="text-sm text-slate-400">
           Reserve is {listing.reservePrice.toLocaleString()} {listing.currency}. Your amount is
           never shown to the seller or other bidders until close.
@@ -83,9 +86,24 @@ export function BidCommitForm({ listing, onBidCommitted, onCancel }: BidCommitFo
           />
         </div>
 
+        <div className="rounded-lg border border-slate-800 bg-slate-950/50 p-4 text-xs">
+          <div className="flex items-center justify-between text-slate-400">
+            <span>Bid</span>
+            <span>{validBid ? parsedAmount.toLocaleString() : "--"} {listing.currency}</span>
+          </div>
+          <div className="mt-2 flex items-center justify-between text-slate-400">
+            <span>Required listing stake</span>
+            <span>{stake.toLocaleString()} {listing.currency}</span>
+          </div>
+          <div className="mt-3 flex items-center justify-between border-t border-slate-800 pt-3 font-medium text-slate-100">
+            <span>Total amount to lock</span>
+            <span>{validBid ? (parsedAmount + stake).toLocaleString() : "--"} {listing.currency}</span>
+          </div>
+        </div>
+
         <button
           type="submit"
-          disabled={isProving || !amount}
+          disabled={isProving || !validBid}
           className="w-full py-3 bg-slate-100 text-slate-950 text-sm font-medium rounded-lg hover:bg-white disabled:opacity-50 transition-all flex items-center justify-center gap-2"
         >
           {isProving ? (
@@ -94,7 +112,7 @@ export function BidCommitForm({ listing, onBidCommitted, onCancel }: BidCommitFo
             </>
           ) : (
             <>
-              <Lock className="h-4 w-4" /> Generate proof and commit bid
+              <Lock className="h-4 w-4" /> Simulate proof and commitment
             </>
           )}
         </button>

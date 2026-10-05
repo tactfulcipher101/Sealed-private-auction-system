@@ -7,9 +7,13 @@ export interface Listing {
   region: string;
   description: string;
   reservePrice: number;
-  currency: "USDC" | "USDT" | "cNGN" | "EURC";
+  stakeBps: number;
+  legalClosingWindowSeconds: number;
+  currency: "TEST" | "USDC" | "USDT" | "cNGN" | "EURC";
   verifiedBy: string;
   sellerWalletAddress: string;
+  onChain?: boolean;
+  transactionHash?: string;
   imageUrls?: string[];
 }
 
@@ -31,6 +35,8 @@ export const demoListings: Listing[] = [
     description:
       "Fully serviced duplex with private jetty access. Listed following an estate liquidation.",
     reservePrice: 185000,
+    stakeBps: 1000,
+    legalClosingWindowSeconds: 604800,
     currency: "cNGN",
     verifiedBy: "NIESV-registered surveyor",
     sellerWalletAddress: "0x7a41...9c2e",
@@ -43,6 +49,8 @@ export const demoListings: Listing[] = [
     description:
       "Manual-wind, rose gold case. Condition and provenance verified prior to listing.",
     reservePrice: 42000,
+    stakeBps: 0,
+    legalClosingWindowSeconds: 0,
     currency: "USDC",
     verifiedBy: "Real Authentication",
     sellerWalletAddress: "0xb318...44f0",
@@ -54,6 +62,8 @@ export const demoListings: Listing[] = [
     region: "Maitama, Abuja",
     description: "Fully tenanted, sold as a single lot due to a corporate wind-down.",
     reservePrice: 310000,
+    stakeBps: 1000,
+    legalClosingWindowSeconds: 604800,
     currency: "USDT",
     verifiedBy: "ESVARBON-registered valuer",
     sellerWalletAddress: "0x2e6d...d17a",
@@ -65,6 +75,8 @@ export const demoListings: Listing[] = [
     region: "Held in London",
     description: "Vintage piece, single prior owner. Authentication on file.",
     reservePrice: 28500,
+    stakeBps: 0,
+    legalClosingWindowSeconds: 0,
     currency: "EURC",
     verifiedBy: "Real Authentication",
     sellerWalletAddress: "0xf90c...7b21",

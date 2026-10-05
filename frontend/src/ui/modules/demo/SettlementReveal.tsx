@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { ArrowRight, CheckCircle2, FileCheck2, RotateCcw, Trophy, Truck, Undo2, UserRound } from "lucide-react";
 import { formatCurrency } from "@/lib/demoCrypto";
+import { calculateSellerProceeds, getListingPolicy } from "@/lib/auctionLogic";
 import type { Listing, SimulatedBid } from "@/lib/demoData";
 
 const REVEAL_INTERVAL_MS = 300;
@@ -21,6 +22,11 @@ export function SettlementReveal({ listing, bids, isSeller, onRestart }: Settlem
   const winner = sortedBids[0];
   const userBid = bids.find((bid) => bid.isUser);
   const userWon = winner?.isUser ?? false;
+  const listingPolicy = getListingPolicy(
+    listing.category,
+    listing.stakeBps,
+    listing.legalClosingWindowSeconds,
+  );
 
   useEffect(() => {
     if (revealedCount >= sortedBids.length) return;
@@ -33,8 +39,7 @@ export function SettlementReveal({ listing, bids, isSeller, onRestart }: Settlem
   return (
     <div className="space-y-6">
       <div className="p-4 rounded-lg bg-slate-900/60 border border-slate-800 text-xs text-slate-400">
-        Auction closed. Commitments are being decrypted to determine the winner. This is the one
-        moment amounts become visible, and only for this auction.
+        Demo auction closed. The sample bids are being revealed to illustrate the reveal-at-close flow on-chain.
       </div>
 
       <div className="rounded-lg border border-slate-800 divide-y divide-slate-800/80 overflow-y-auto max-h-96">
@@ -83,13 +88,26 @@ export function SettlementReveal({ listing, bids, isSeller, onRestart }: Settlem
           </p>
           <p className="text-xs text-slate-400">
             {userWon
-              ? "Your identity is now shared with the seller and verification partner to arrange " +
-                (listing.category === "real-estate" ? "legal closing." : "double-blind delivery.")
+              ? "The seller receives the winning bidder details off-chain to arrange " +
+                (listing.category === "real-estate" ? "legal closing." : "handoff and inspection.")
               : "Your " +
                 formatCurrency(userBid.amount, userBid.currency) +
-                " commitment was released back to your wallet automatically. No claim needed."}
+                " bid is eligible for refund. The deployed contract requires you to submit the losing-bid claim transaction."}
           </p>
         </motion.div>
+      )}
+
+      {allRevealed && winner && (
+        <div className="rounded-lg border border-slate-800 bg-slate-950/40 p-4 text-xs text-slate-400">
+          <div className="flex items-center justify-between gap-3">
+            <span>Seller proceeds after 3% protocol fee</span>
+            <span className="text-slate-200 font-mono">{formatCurrency(calculateSellerProceeds(winner.amount), winner.currency)}</span>
+          </div>
+          <div className="mt-2 flex items-center justify-between gap-3">
+            <span>Policy</span>
+            <span className="text-slate-200">{listingPolicy.category === "real-estate" ? "stake-backed legal closure" : "delivery-settled goods"}</span>
+          </div>
+        </div>
       )}
 
       {allRevealed && isSeller && winner && (
@@ -103,7 +121,7 @@ export function SettlementReveal({ listing, bids, isSeller, onRestart }: Settlem
             <div>
               <p className="text-base font-semibold text-slate-100">Highest bidder identified</p>
               <p className="mt-1 text-xs leading-relaxed text-slate-400">
-                The winning bidder is now visible for settlement. Their identity should be shared
+                The winning bidder is now visible in this simulated settlement. Their identity should be shared
                 with the seller and approved verification partner for the next steps.
               </p>
             </div>
@@ -138,7 +156,7 @@ export function SettlementReveal({ listing, bids, isSeller, onRestart }: Settlem
                 <span>
                   {listing.category === "real-estate"
                     ? "A licensed local legal representative should contact the winning bidder to begin title checks, contract signing, and registry transfer."
-                    : "Release the asset to the approved courier or custody partner for double-blind delivery and condition verification."}
+                    : "Release the asset to the approved courier or custody partner for handoff and condition verification."}
                 </span>
               </div>
               <div className="flex gap-3">

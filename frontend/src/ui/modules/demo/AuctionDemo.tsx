@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Gavel, Tags, LogOut } from "lucide-react";
 import { demoListings, type Listing, type SimulatedBid } from "@/lib/demoData";
+import type { ConnectedAztecWallet } from "@/lib/aztecWallet";
 import { WalletConnect } from "./WalletConnect";
 import { ListingCatalog } from "./ListingCatalog";
 import { ListingDetail } from "./ListingDetail";
@@ -14,7 +15,7 @@ import { SellAssetForm } from "./SellAssetForm";
 type DemoStep = "catalog" | "sell" | "listing" | "bidding" | "live" | "settled";
 
 export function AuctionDemo() {
-  const [userWallet, setUserWallet] = useState<string | null>(null);
+  const [connection, setConnection] = useState<ConnectedAztecWallet | null>(null);
   const [step, setStep] = useState<DemoStep>("catalog");
   const [listings, setListings] = useState<Listing[]>(demoListings);
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
@@ -51,20 +52,21 @@ export function AuctionDemo() {
     setStep("catalog");
   }
 
-  function handleSwitchWallet() {
-    setUserWallet(null);
+  async function handleSwitchWallet() {
+    await connection?.disconnect();
+    setConnection(null);
     setSelectedListing(null);
     setUserBid(null);
     setFinalBids([]);
     setStep("catalog");
   }
 
-  const isOwnListing = selectedListing?.sellerWalletAddress === userWallet;
+  const isOwnListing = selectedListing?.sellerWalletAddress === connection?.address;
 
-  if (!userWallet) {
+  if (!connection) {
     return (
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-10 sm:py-16">
-        <WalletConnect onConnected={setUserWallet} />
+        <WalletConnect onConnected={setConnection} />
       </div>
     );
   }
@@ -72,7 +74,7 @@ export function AuctionDemo() {
   return (
     <div className="max-w-2xl mx-auto px-4 sm:px-6 py-10 sm:py-16">
       <div className="flex items-center justify-between mb-8 text-xs text-slate-500">
-        <span className="font-mono">Connected as {userWallet}</span>
+        <span className="font-mono">Aztec account {connection.address}</span>
         <button
           onClick={handleSwitchWallet}
           className="inline-flex items-center gap-1.5 hover:text-slate-300 transition-colors"
@@ -80,6 +82,10 @@ export function AuctionDemo() {
           <LogOut className="h-3 w-3" /> Switch wallet
         </button>
       </div>
+
+      <p className="mb-8 rounded-lg border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-xs leading-5 text-amber-100/80">
+        Wallet connected. Verifier-authorized listing creation submits to the configured contract; existing catalog entries and bidding/settlement flows are previews.
+      </p>
 
       {(step === "catalog" || step === "sell") && (
         <div className="flex gap-2 mb-8 p-1 rounded-lg bg-slate-900/60 border border-slate-800 w-fit mx-auto">
@@ -114,7 +120,7 @@ export function AuctionDemo() {
 
       {step === "sell" && (
         <SellAssetForm
-          sellerWalletAddress={userWallet}
+          connection={connection}
           onListingCreated={handleListingCreated}
           onCancel={() => setStep("catalog")}
         />

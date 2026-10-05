@@ -17,6 +17,7 @@ export function Header() {
           <a href="/about" className="hover:text-slate-100 transition-colors">About</a>
           <a href="/protocol" className="hover:text-slate-100 transition-colors">Blueprint</a>
           <a href="/demo" className="hover:text-slate-100 transition-colors">Live Demo</a>
+          <a href="/deploy" className="hover:text-slate-100 transition-colors">Testnet Deploy</a>
         </nav>
 
         <div className="flex shrink-0 items-center gap-4">

@@ -14,7 +14,7 @@ export function ListingCatalog({ listings, onSelectListing, highlightId }: Listi
       <div className="space-y-2 text-center">
         <h1 className="text-2xl font-bold text-slate-100">Live catalog</h1>
         <p className="text-sm text-slate-400">
-          Listings are public. Bids never are. Pick one to see the bidding flow end to end.
+          Listing details are public. Bids are hidden from the market while bidding is open, and the commitment hash and amount become public only at reveal. The bidder address stays hidden at reveal.
         </p>
       </div>
 
@@ -49,6 +49,11 @@ export function ListingCatalog({ listings, onSelectListing, highlightId }: Listi
                   {isNew && (
                     <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-1.5 py-0.5 rounded shrink-0">
                       <Sparkles className="h-2.5 w-2.5" /> just listed
+                    </span>
+                  )}
+                  {listing.onChain && (
+                    <span className="shrink-0 rounded border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] text-emerald-300">
+                      on-chain
                     </span>
                   )}
                 </div>

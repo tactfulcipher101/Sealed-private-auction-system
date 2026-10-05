@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Lock, Users } from "lucide-react";
 import { generateWalletAddress, generateCommitmentHash, randomBidAmount } from "@/lib/demoCrypto";
+import { calculateStake, getListingPolicy } from "@/lib/auctionLogic";
 import type { Listing, SimulatedBid } from "@/lib/demoData";
 
 const AUCTION_DURATION_SECONDS = 24;
@@ -19,6 +20,11 @@ interface LiveAuctionRoomProps {
 export function LiveAuctionRoom({ listing, userBid, onAuctionClosed }: LiveAuctionRoomProps) {
   const [secondsRemaining, setSecondsRemaining] = useState(AUCTION_DURATION_SECONDS);
   const [bids, setBids] = useState<SimulatedBid[]>(userBid ? [userBid] : []);
+  const listingPolicy = getListingPolicy(
+    listing.category,
+    listing.stakeBps,
+    listing.legalClosingWindowSeconds,
+  );
 
   useEffect(() => {
     const span = MAX_SIMULATED_COMPETITORS - MIN_SIMULATED_COMPETITORS + 1;
@@ -66,10 +72,27 @@ export function LiveAuctionRoom({ listing, userBid, onAuctionClosed }: LiveAucti
       <div className="flex items-center justify-between p-4 rounded-lg bg-slate-900/60 border border-slate-800">
         <div className="flex items-center gap-2 text-xs text-slate-400">
           <Users className="h-4 w-4 text-emerald-400" />
-          {bids.length} commitment{bids.length === 1 ? "" : "s"} locked in escrow
+          {bids.length} simulated commitment{bids.length === 1 ? "" : "s"}
         </div>
         <div className="font-mono text-sm text-slate-100">
           Closes in {String(minutes).padStart(2, "0")}:{String(seconds).padStart(2, "0")}
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-slate-800 bg-slate-950/40 p-4 text-[11px] text-slate-400">
+        <div className="flex items-center justify-between gap-3">
+          <span>Listing policy</span>
+          <span className="text-slate-200">{listing.category === "real-estate" ? "stake-backed close" : "goods settlement"}</span>
+        </div>
+        <div className="mt-2 flex items-center justify-between gap-3">
+          <span>Required stake</span>
+          <span className="font-mono text-slate-200">
+            {calculateStake(Math.max(listing.reservePrice, 10000), listing.stakeBps).toLocaleString()} {listing.currency}
+          </span>
+        </div>
+        <div className="mt-2 flex items-center justify-between gap-3">
+          <span>Deadline rule</span>
+          <span className="text-slate-200">{listingPolicy.legalClosingWindowSeconds ? `${listingPolicy.legalClosingWindowSeconds / 86400}d window` : "Default delivery window"}</span>
         </div>
       </div>
 
@@ -94,8 +117,7 @@ export function LiveAuctionRoom({ listing, userBid, onAuctionClosed }: LiveAucti
       </div>
 
       <p className="text-[11px] text-slate-500">
-        Every commitment above is simulated for this demo and hidden from other participants,
-        including the seller. Amounts unlock only when the auction closes.
+        Bid activity above is generated for this local demo. No contract, wallet, or escrow is being used.
       </p>
     </div>
   );
