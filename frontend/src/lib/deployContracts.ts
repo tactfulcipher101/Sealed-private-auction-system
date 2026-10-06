@@ -70,6 +70,11 @@ export async function deployPrivateToken(connection: ConnectedAztecWallet): Prom
   return { address: contract.address.toString(), transactionHash: receipt.txHash.toString() };
 }
 
+// Constructor defaults. The contract caps these at 1000, 5000 and 10000 bps.
+const DEPLOY_SETTLEMENT_FEE_BPS = BigInt(300);
+const DEPLOY_LATE_REVEAL_PENALTY_BPS = BigInt(2000);
+const DEPLOY_SLASH_SELLER_SHARE_BPS = BigInt(10000);
+
 export async function deploySealedAuction(
   connection: ConnectedAztecWallet,
   treasuryInput: string,
@@ -94,7 +99,15 @@ export async function deploySealedAuction(
   const { contract, receipt } = await Contract.deploy(
     connection.wallet,
     artifact,
-    [treasury, guardians, pauseThreshold],
+    [
+      treasury,
+      account,
+      guardians,
+      pauseThreshold,
+      DEPLOY_SETTLEMENT_FEE_BPS,
+      DEPLOY_LATE_REVEAL_PENALTY_BPS,
+      DEPLOY_SLASH_SELLER_SHARE_BPS,
+    ],
   ).send({ from: account });
   if (!receipt.hasExecutionSucceeded()) {
     throw new Error(receipt.error ?? "SealedAuction deployment failed.");
