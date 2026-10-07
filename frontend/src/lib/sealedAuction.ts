@@ -145,7 +145,7 @@ export async function createVerifiedListing(
   }
 
   const listingId = Fr.random();
-  const categoryId = input.category === "real-estate" ? 1 : 0;
+  const categoryId = input.category === "real-estate" ? BigInt(1) : BigInt(0);
   const auction = Contract.at(auctionAddress, artifact, connection.wallet);
   const { receipt } = await (auction.methods as unknown as SealedAuctionMethods).create_listing(
     listingId,
@@ -155,7 +155,7 @@ export async function createVerifiedListing(
     BigInt(input.revealDeadline),
     sellerAddress,
     categoryId,
-    input.stakeBps,
+    BigInt(input.stakeBps),
     BigInt(input.legalClosingWindowSeconds),
   ).send({ from: connectedAddress });
   if (!receipt.hasExecutionSucceeded()) {
