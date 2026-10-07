@@ -66,8 +66,8 @@ export function ListingDetail({ listing, isOwnListing, onEnterBidding, onBack }:
         <div className="p-4 rounded-lg bg-slate-950 border border-slate-800/80 flex items-start gap-3">
           <Ban className="h-4 w-4 text-rose-400 shrink-0 mt-0.5" />
           <p className="text-xs text-slate-400 leading-relaxed">
-            This listing belongs to your connected wallet, so bidding is disabled here. This
-            mirrors the real protocol: a seller cannot bid on their own auction.
+            This listing belongs to your connected wallet, so bidding is disabled in this demo.
+            The contract does not currently enforce this rule.
           </p>
         </div>
       ) : (
