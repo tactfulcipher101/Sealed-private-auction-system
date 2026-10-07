@@ -121,8 +121,8 @@ export function SettlementReveal({ listing, bids, isSeller, onRestart }: Settlem
             <div>
               <p className="text-base font-semibold text-slate-100">Highest bidder identified</p>
               <p className="mt-1 text-xs leading-relaxed text-slate-400">
-                The winning bidder is now visible in this simulated settlement. Their identity should be shared
-                with the seller and approved verification partner for the next steps.
+                In this simulation the winning bidder address is shown for illustration. On the real contract a reveal makes only the commitment hash and amount public, never the bidder.
+                This demo does not model how the seller learns the winner.
               </p>
             </div>
           </div>
@@ -130,7 +130,7 @@ export function SettlementReveal({ listing, bids, isSeller, onRestart }: Settlem
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="rounded-lg border border-emerald-500/20 bg-slate-950/40 p-4">
               <div className="flex items-center gap-2 text-[11px] uppercase tracking-wider text-slate-500">
-                <UserRound className="h-3.5 w-3.5" /> Winning bidder
+                <UserRound className="h-3.5 w-3.5" /> Winning bidder (simulated)
               </div>
               <p className="mt-2 font-mono text-sm text-emerald-300">{winner.walletAddress}</p>
             </div>
