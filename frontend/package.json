@@ -13,6 +13,7 @@
   "dependencies": {
     "@aztec/aztec.js": "^5.2.0-nightly.20260815",
     "@aztec/foundation": "^5.2.0-nightly.20260815",
+    "@aztec/stdlib": "^5.2.0-nightly.20260815",
     "@aztec/wallet-sdk": "^5.2.0-nightly.20260815",
     "buffer": "6.0.3",
     "clsx": "^2.1.1",

@@ -191,6 +191,17 @@ export function TestnetDeploymentWizard() {
         )}
       </section>
 
+      {auctionDeployment?.auctionSecret && (
+        <section className="space-y-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-5">
+          <div>
+            <h2 className="text-sm font-semibold text-amber-100">Save the auction secret now</h2>
+            <p className="mt-1 text-xs leading-5 text-amber-100/80">This secret is shown once and is not stored anywhere. Escrowed bids are held under keys derived from it, and every account that claims a payout or refund needs it registered in its wallet. If it is lost, escrowed funds cannot be paid out.</p>
+          </div>
+          <pre className="overflow-x-auto rounded-lg border border-slate-800 bg-slate-950 p-4 text-[11px] leading-5 text-slate-200">{auctionDeployment.auctionSecret}</pre>
+          <button type="button" onClick={() => void navigator.clipboard.writeText(auctionDeployment.auctionSecret ?? "")} className="flex items-center gap-2 rounded-lg border border-amber-500/30 px-3 py-2 text-xs text-amber-100 hover:bg-amber-500/10"><Clipboard className="h-3.5 w-3.5" />Copy secret</button>
+        </section>
+      )}
+
       {error && <p role="alert" className="flex items-start gap-2 rounded-lg border border-rose-500/30 bg-rose-500/5 p-3 text-xs leading-5 text-rose-200"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />{error}</p>}
 
       {envSnippet && (

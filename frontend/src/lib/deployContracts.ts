@@ -1,11 +1,15 @@
 import { Contract } from "@aztec/aztec.js/contracts";
 import { AztecAddress } from "@aztec/aztec.js/addresses";
 import type { ContractArtifact } from "@aztec/stdlib/abi";
+import { Fr } from "@aztec/foundation/curves/bn254";
+import { deriveKeys } from "@aztec/stdlib/keys";
 import { getConfiguredChainInfo, getConfiguredNodeInfo, type ConnectedAztecWallet } from "@/lib/aztecWallet";
 
 export interface DeploymentResult {
   address: string;
   transactionHash: string;
+  /** Auction key secret. Shown once to the deployer and never stored. Every claimant needs it registered in their wallet. */
+  auctionSecret?: string;
 }
 
 export interface DeploymentReadiness {
@@ -96,6 +100,8 @@ export async function deploySealedAuction(
     throw new Error("Pause threshold must be from one to three.");
   }
 
+  const auctionSecret = await Fr.random();
+  const { publicKeys } = await deriveKeys(auctionSecret);
   const { contract, receipt } = await Contract.deploy(
     connection.wallet,
     artifact,
@@ -108,9 +114,15 @@ export async function deploySealedAuction(
       DEPLOY_LATE_REVEAL_PENALTY_BPS,
       DEPLOY_SLASH_SELLER_SHARE_BPS,
     ],
+    undefined,
+    { publicKeys },
   ).send({ from: account });
   if (!receipt.hasExecutionSucceeded()) {
     throw new Error(receipt.error ?? "SealedAuction deployment failed.");
   }
-  return { address: contract.address.toString(), transactionHash: receipt.txHash.toString() };
+  return {
+    address: contract.address.toString(),
+    transactionHash: receipt.txHash.toString(),
+    auctionSecret: auctionSecret.toString(),
+  };
 }
