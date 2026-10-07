@@ -5,6 +5,7 @@ import { AlertCircle, Check, Loader2, ShieldCheck, Wallet, X } from "lucide-reac
 import { WalletManager, type DiscoverySession, type PendingConnection, type WalletProvider } from "@aztec/wallet-sdk/manager";
 import type { ConnectedAztecWallet } from "@/lib/aztecWallet";
 import { getConfiguredChainInfo } from "@/lib/aztecWallet";
+import { hashToEmoji } from "@aztec/wallet-sdk/crypto";
 
 interface WalletConnectProps {
   onConnected: (connection: ConnectedAztecWallet) => void;
@@ -167,13 +168,15 @@ export function WalletConnect({ onConnected }: WalletConnectProps) {
             <div>
               <p className="text-sm font-medium text-slate-100">Verify the connection phrase</p>
               <p className="mt-1 text-xs leading-5 text-slate-400">
-                Compare this exact value with {selectedProvider.name}. Approve only if both match.
+                Compare these emojis, in this order, with {selectedProvider.name}. Approve only if both match.
               </p>
             </div>
           </div>
-          <code className="block select-all break-all rounded border border-slate-800 bg-slate-950 p-3 font-mono text-xs text-amber-200">
-            {verificationHash}
-          </code>
+          <div className="grid grid-cols-3 gap-2 rounded border border-slate-800 bg-slate-950 p-3 text-center text-3xl">
+            {Array.from(hashToEmoji(verificationHash)).map((emojiSymbol, emojiPosition) => (
+              <span key={emojiPosition}>{emojiSymbol}</span>
+            ))}
+          </div>
           <div className="flex gap-2">
             <button
               type="button"
