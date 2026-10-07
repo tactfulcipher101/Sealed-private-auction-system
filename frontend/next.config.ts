@@ -1,7 +1,11 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  turbopack: {
+    resolveAlias: {
+      "next/dist/compiled/buffer": "buffer",
+    },
+  },
 };
 
 export default nextConfig;
