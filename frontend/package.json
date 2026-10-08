@@ -11,10 +11,10 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "@aztec/aztec.js": "^5.2.0-nightly.20260815",
-    "@aztec/foundation": "^5.2.0-nightly.20260815",
-    "@aztec/stdlib": "^5.2.0-nightly.20260815",
-    "@aztec/wallet-sdk": "^5.2.0-nightly.20260815",
+    "@aztec/aztec.js": "5.0.0",
+    "@aztec/foundation": "5.0.0",
+    "@aztec/stdlib": "5.0.0",
+    "@aztec/wallet-sdk": "5.0.0",
     "buffer": "6.0.3",
     "clsx": "^2.1.1",
     "framer-motion": "^13.4.0",
