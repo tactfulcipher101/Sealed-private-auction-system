@@ -130,6 +130,7 @@ export function AuctionDemo() {
         <ListingDetail
           listing={selectedListing}
           isOwnListing={isOwnListing}
+          connection={connection}
           onEnterBidding={() => setStep(isOwnListing ? "live" : "bidding")}
           onBack={() => setStep("catalog")}
         />

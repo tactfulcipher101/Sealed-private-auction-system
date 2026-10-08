@@ -1,15 +1,45 @@
 import { ArrowLeft, ShieldCheck, EyeOff, Ban } from "lucide-react";
 import type { Listing } from "@/lib/demoData";
 import { formatCurrency } from "@/lib/demoCrypto";
+import { useEffect, useState } from "react";
+import { Fr } from "@aztec/foundation/curves/bn254";
+import type { ConnectedAztecWallet } from "@/lib/aztecWallet";
+import { readListingOnChain } from "@/lib/sealedAuction";
 
 interface ListingDetailProps {
   listing: Listing;
   isOwnListing?: boolean;
+  connection?: ConnectedAztecWallet | null;
   onEnterBidding: () => void;
   onBack: () => void;
 }
 
-export function ListingDetail({ listing, isOwnListing, onEnterBidding, onBack }: ListingDetailProps) {
+export function ListingDetail({ listing, isOwnListing, connection, onEnterBidding, onBack }: ListingDetailProps) {
+  const [chainStatus, setChainStatus] = useState<{ id: string; line: string } | null>(null);
+
+  useEffect(() => {
+    if (!listing.onChain || !connection) return;
+    const activeConnection = connection;
+    const targetListingId = listing.id;
+    let cancelled = false;
+    const loadChainStatus = async () => {
+      try {
+        const state = await readListingOnChain(activeConnection, Fr.fromString(targetListingId));
+        if (!cancelled) {
+          setChainStatus({ id: targetListingId, line: `Chain status: ${state.statusLabel}, close timestamp ${state.closeTimestamp}` });
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setChainStatus({ id: targetListingId, line: `Chain status unavailable: ${error instanceof Error ? error.message : "read failed"}` });
+        }
+      }
+    };
+    void loadChainStatus();
+    return () => {
+      cancelled = true;
+    };
+  }, [connection, listing.id, listing.onChain]);
+
   return (
     <div className="space-y-6">
       <button
@@ -58,6 +88,9 @@ export function ListingDetail({ listing, isOwnListing, onEnterBidding, onBack }:
           <p className="text-[11px] leading-5 text-slate-400">
             The descriptive metadata shown here is local to this browser session; it is not stored in the auction contract.
           </p>
+          {chainStatus?.id === listing.id && (
+            <p className="font-mono text-[11px] text-emerald-200/80">{chainStatus.line}</p>
+          )}
           {listing.transactionHash && (
             <p className="break-all font-mono text-[10px] text-emerald-200/70">Transaction {listing.transactionHash}</p>
           )}

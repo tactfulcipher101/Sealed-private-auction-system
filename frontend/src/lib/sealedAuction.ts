@@ -76,6 +76,12 @@ export function configuredAddress(value: string | null, label: string) {
 }
 
 interface SealedAuctionMethods {
+  get_status: (listing_id: Fr) => {
+    simulate: (options: { from: AztecAddress }) => Promise<{ result: unknown }>;
+  };
+  get_listing: (listing_id: Fr) => {
+    simulate: (options: { from: AztecAddress }) => Promise<{ result: unknown }>;
+  };
   get_asset_verifier: () => {
     simulate: (options: { from: AztecAddress }) => Promise<{ result: unknown }>;
   };
@@ -95,6 +101,47 @@ export async function getAssetVerifier(connection: ConnectedAztecWallet): Promis
   const auction = Contract.at(auctionAddress, artifact, connection.wallet);
   const result = await (auction.methods as unknown as SealedAuctionMethods).get_asset_verifier().simulate({ from: connectedAddress });
   return AztecAddress.schema.parse(result.result);
+}
+
+export interface OnChainListingState {
+  status: bigint;
+  statusLabel: string;
+  verified: boolean;
+  closeTimestamp: bigint;
+}
+
+const LISTING_STATUS_LABELS: Record<string, string> = {
+  "1": "open for commitments",
+  "2": "reveal window",
+  "3": "settled",
+};
+
+export async function readListingOnChain(connection: ConnectedAztecWallet, listingId: Fr): Promise<OnChainListingState> {
+  await assertSealedAuctionFunction("get_status");
+  await assertSealedAuctionFunction("get_listing");
+  const config = getNetworkConfig();
+  const auctionAddress = configuredAddress(config.contractAddress, "Auction contract");
+  const connectedAddress = configuredAddress(connection.address, "Connected account");
+  const artifact = await getSealedAuctionArtifact();
+  const auction = Contract.at(auctionAddress, artifact, connection.wallet);
+  const methods = auction.methods as unknown as SealedAuctionMethods;
+  const statusResult = await methods.get_status(listingId).simulate({ from: connectedAddress });
+  const listingResult = await methods.get_listing(listingId).simulate({ from: connectedAddress });
+
+  const status = statusResult.result;
+  const listingInfo = listingResult.result as { verified?: unknown; close_timestamp?: unknown } | null | undefined;
+  if (typeof status !== "bigint") {
+    throw new Error("get_status returned an unexpected value.");
+  }
+  if (!listingInfo || typeof listingInfo.verified !== "boolean" || typeof listingInfo.close_timestamp !== "bigint") {
+    throw new Error("get_listing returned an unexpected value.");
+  }
+  return {
+    status,
+    statusLabel: LISTING_STATUS_LABELS[status.toString()] ?? `unknown (${status})`,
+    verified: listingInfo.verified,
+    closeTimestamp: listingInfo.close_timestamp,
+  };
 }
 
 export interface CreateListingInput {
