@@ -3094,3 +3094,49 @@ unconstrained fn slash_after_pause_before_finalize_is_not_extended() {
         SealedAuction::at(auction).slash_stake_for_default(7099, bid_amount),
     );
 }
+
+#[test(should_fail)]
+unconstrained fn commit_bid_from_listing_seller_reverts() {
+    let mut env = TestEnvironment::new();
+    let verifier = env.create_light_account();
+    let treasury = env.create_light_account();
+    let guardian_one = env.create_light_account();
+    let guardian_two = env.create_light_account();
+    let guardian_three = env.create_light_account();
+    let listing_seller = env.create_contract_account();
+    let salt: Field = 0x7b01;
+
+    let token = env.deploy("@private_token/PrivateToken").without_initializer();
+    let auction = env.deploy("@sealed_auction/SealedAuction").with_public_initializer(
+        verifier,
+        SealedAuction::interface().constructor(treasury, verifier, [guardian_one, guardian_two, guardian_three], 2, 300, 2000, 10000),
+    );
+    env.call_private(listing_seller, PrivateToken::at(token).faucet(BIDDER_A_FUNDS));
+    let close_timestamp = env.last_block_timestamp() + 1000;
+    let reveal_deadline = close_timestamp + 1000;
+    env.call_public(
+        verifier,
+        SealedAuction::at(auction).create_listing(
+            LISTING_ID,
+            token,
+            RESERVE,
+            close_timestamp,
+            reveal_deadline,
+            listing_seller,
+            0,
+            0,
+            0,
+        ),
+    );
+    add_private_authwit_from_call(
+        env,
+        listing_seller,
+        auction,
+        PrivateToken::at(token).transfer_in_private(listing_seller, auction, BID_A, TOKEN_AUTHWIT_NONCE),
+    );
+    env.call_private_opts(
+        listing_seller,
+        CallPrivateOptions::new().with_additional_scopes([auction, token]),
+        SealedAuction::at(auction).commit_bid(LISTING_ID, BID_A, salt, TOKEN_AUTHWIT_NONCE),
+    );
+}

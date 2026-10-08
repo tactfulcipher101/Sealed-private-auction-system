@@ -100,7 +100,7 @@ export function ListingDetail({ listing, isOwnListing, connection, onEnterBiddin
           <Ban className="h-4 w-4 text-rose-400 shrink-0 mt-0.5" />
           <p className="text-xs text-slate-400 leading-relaxed">
             This listing belongs to your connected wallet, so bidding is disabled in this demo.
-            The contract does not currently enforce this rule.
+            The contract rejects bids from the listing's seller address; a second account is not blocked.
           </p>
         </div>
       ) : (

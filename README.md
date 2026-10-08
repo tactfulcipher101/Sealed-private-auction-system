@@ -10,8 +10,10 @@ Sealed is a sealed-bid auction written in Noir for the Aztec network. Bids are c
 - The workspace is pinned to Aztec `5.2.0-nightly.20260815` and Nargo `1.0.0-beta.25`. A public testnet running a matching version is still needed.
 - Each listing holds at most 32 bids.
 - There is no on-chain dispute window for mobile goods.
+- `commit_bid` rejects a bid from the same address as the listing's seller. A seller can still bid from a second account.
+- Every claimant needs the auction secret to claim. There is no custody scheme for that secret yet.
 - Not implemented yet: `listing_id` inside the commitment hash, and expiry for guardian votes.
-- The frontend is a demo plus a testnet deploy wizard. Catalog, bidding and settlement screens are previews that do not call the contract. The deploy wizard has been updated for the current constructor but has not been run end-to-end on a live network.
+- The frontend is a demo plus a testnet deploy wizard. Catalog, bidding and settlement screens are previews that do not call the contract, apart from the sell step and a read-only status line on listings created on-chain (not yet run against a live wallet). The deploy wizard has been updated for the current constructor but has not been run end-to-end on a live network.
 
 ## What the protocol does
 

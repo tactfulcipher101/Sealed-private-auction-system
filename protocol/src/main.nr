@@ -314,6 +314,7 @@ pub contract SealedAuction {
             f"commit_bid must be called through an account contract",
         );
         let listing = self.storage.listings.at(listing_id).read();
+        assert(bidder != listing.seller, "seller cannot bid on own listing");
         let now = self.context.get_anchor_block_header().timestamp();
         assert(listing.verified, "listing is not verified");
         assert(amount >= listing.reserve_price, "bid is below reserve price");
