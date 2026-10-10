@@ -2,7 +2,8 @@ import { Contract } from "@aztec/aztec.js/contracts";
 import type { AppCapabilities } from "@aztec/aztec.js/wallet";
 import { AztecAddress } from "@aztec/aztec.js/addresses";
 import { Fr } from "@aztec/foundation/curves/bn254";
-import type { ContractArtifact } from "@aztec/stdlib/abi";
+import type { ContractArtifact, FunctionCall } from "@aztec/stdlib/abi";
+import type { AuthWitness } from "@aztec/stdlib/auth-witness";
 import { getConfiguredChainInfo, type ConnectedAztecWallet } from "@/lib/aztecWallet";
 import type { Listing } from "@/lib/demoData";
 import { getNetworkConfig, type SupportedCurrency } from "@/lib/network";
@@ -118,10 +119,25 @@ export function buildCapabilityManifest(): AppCapabilities {
       { type: "contracts", contracts: [auctionAddress, ...tokenAddresses], canRegister: true, canGetMetadata: true },
       {
         type: "simulation",
-        transactions: { scope: [{ contract: auctionAddress, function: "*" }] },
-        utilities: { scope: [{ contract: auctionAddress, function: "*" }] },
+        transactions: { scope: [{ contract: auctionAddress, function: "*" }, ...tokenAddresses.map((tokenAddress) => ({ contract: tokenAddress, function: "*" }))] },
+        utilities: { scope: [{ contract: auctionAddress, function: "*" }, ...tokenAddresses.map((tokenAddress) => ({ contract: tokenAddress, function: "*" }))] },
       },
-      { type: "transaction", scope: [{ contract: auctionAddress, function: "create_listing" }] },
+      {
+        type: "transaction",
+        scope: [
+          ...[
+            "create_listing",
+            "commit_bid",
+            "close_auction",
+            "reveal_bid",
+            "reveal_bid_for",
+            "finalize_settlement",
+            "claim_winning_bid",
+            "claim_losing_bid",
+          ].map((functionName) => ({ contract: auctionAddress, function: functionName })),
+          ...tokenAddresses.map((tokenAddress) => ({ contract: tokenAddress, function: "faucet" })),
+        ],
+      },
     ],
   };
 }
@@ -246,6 +262,92 @@ export async function createVerifiedListing(
     sellerWalletAddress: sellerAddress.toString(),
     onChain: true,
     imageUrls: input.imageUrls,
+    transactionHash: receipt.txHash.toString(),
+  };
+}
+
+let privateTokenArtifactPromise: Promise<ContractArtifact> | null = null;
+
+async function getPrivateTokenArtifact(): Promise<ContractArtifact> {
+  if (!privateTokenArtifactPromise) {
+    privateTokenArtifactPromise = fetch("/artifacts/private_token-PrivateToken.json")
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error("Compiled token artifact is unavailable. Run aztec compile --workspace and restart the frontend.");
+        }
+        return await response.json() as ContractArtifact;
+      })
+      .catch((error: unknown) => {
+        privateTokenArtifactPromise = null;
+        throw error;
+      });
+  }
+  return privateTokenArtifactPromise;
+}
+
+interface PrivateTokenPullMethods {
+  transfer_in_private: (from: AztecAddress, to: AztecAddress, amount: bigint, authwitNonce: Fr) => {
+    getFunctionCall: () => Promise<FunctionCall>;
+  };
+}
+
+interface CommitBidMethods {
+  commit_bid: (listingId: Fr, amount: bigint, salt: Fr, tokenAuthwitNonce: Fr) => {
+    send: (options: { from: AztecAddress; authWitnesses: AuthWitness[] }) => Promise<{
+      receipt: { hasExecutionSucceeded: () => boolean; error?: string; txHash: { toString: () => string } };
+    }>;
+  };
+}
+
+export interface CommittedBid {
+  listingId: string;
+  amount: string;
+  salt: string;
+  tokenAuthwitNonce: string;
+  transactionHash: string;
+}
+
+/**
+ * Commits a sealed bid on chain. The caller must keep amount and salt: reveal_bid_for needs both and a lost salt cannot be recovered.
+ * The token authwit lets the auction pull amount plus stake from the bidder through transfer_in_private.
+ */
+export async function commitBidOnChain(
+  connection: ConnectedAztecWallet,
+  input: { listingId: string; currency: SupportedCurrency; amount: bigint; stakeBps: number },
+): Promise<CommittedBid> {
+  await assertSealedAuctionFunction("commit_bid");
+  if (input.amount <= BigInt(0)) throw new Error("Bid amount must be positive.");
+  const config = getNetworkConfig();
+  const auctionAddress = configuredAddress(config.contractAddress, "Auction contract");
+  const tokenAddress = configuredAddress(config.tokenAddresses[input.currency] ?? null, `${input.currency} token`);
+  const bidderAddress = configuredAddress(connection.address, "Connected account");
+
+  const stake = input.amount * BigInt(input.stakeBps) / BigInt(10000);
+  const totalLocked = input.amount + stake;
+  const listingId = Fr.fromString(input.listingId);
+  const salt = Fr.random();
+  const tokenAuthwitNonce = Fr.random();
+
+  const [auctionArtifact, tokenArtifact] = await Promise.all([getSealedAuctionArtifact(), getPrivateTokenArtifact()]);
+  const token = Contract.at(tokenAddress, tokenArtifact, connection.wallet);
+  const auction = Contract.at(auctionAddress, auctionArtifact, connection.wallet);
+
+  const pullCall = await (token.methods as unknown as PrivateTokenPullMethods)
+    .transfer_in_private(bidderAddress, auctionAddress, totalLocked, tokenAuthwitNonce)
+    .getFunctionCall();
+  const tokenAuthwit = await connection.wallet.createAuthWit(bidderAddress, { caller: auctionAddress, call: pullCall });
+
+  const { receipt } = await (auction.methods as unknown as CommitBidMethods)
+    .commit_bid(listingId, input.amount, salt, tokenAuthwitNonce)
+    .send({ from: bidderAddress, authWitnesses: [tokenAuthwit] });
+  if (!receipt.hasExecutionSucceeded()) {
+    throw new Error(receipt.error ?? "The bid commitment transaction did not execute successfully.");
+  }
+  return {
+    listingId: input.listingId,
+    amount: input.amount.toString(),
+    salt: salt.toString(),
+    tokenAuthwitNonce: tokenAuthwitNonce.toString(),
     transactionHash: receipt.txHash.toString(),
   };
 }
