@@ -1,4 +1,5 @@
 import { Contract } from "@aztec/aztec.js/contracts";
+import type { AppCapabilities } from "@aztec/aztec.js/wallet";
 import { AztecAddress } from "@aztec/aztec.js/addresses";
 import { Fr } from "@aztec/foundation/curves/bn254";
 import type { ContractArtifact } from "@aztec/stdlib/abi";
@@ -101,6 +102,28 @@ export async function getAssetVerifier(connection: ConnectedAztecWallet): Promis
   const auction = Contract.at(auctionAddress, artifact, connection.wallet);
   const result = await (auction.methods as unknown as SealedAuctionMethods).get_asset_verifier().simulate({ from: connectedAddress });
   return AztecAddress.schema.parse(result.result);
+}
+
+export function buildCapabilityManifest(): AppCapabilities {
+  const config = getNetworkConfig();
+  const auctionAddress = configuredAddress(config.contractAddress, "Auction contract");
+  const tokenAddresses = Object.values(config.tokenAddresses)
+    .filter((value): value is string => Boolean(value))
+    .map((value) => configuredAddress(value, "Token"));
+  return {
+    version: "1.0",
+    metadata: { name: "Sealed private auction", version: "0.1.0" },
+    capabilities: [
+      { type: "accounts", canGet: true, canCreateAuthWit: true },
+      { type: "contracts", contracts: [auctionAddress, ...tokenAddresses], canRegister: true, canGetMetadata: true },
+      {
+        type: "simulation",
+        transactions: { scope: [{ contract: auctionAddress, function: "*" }] },
+        utilities: { scope: [{ contract: auctionAddress, function: "*" }] },
+      },
+      { type: "transaction", scope: [{ contract: auctionAddress, function: "create_listing" }] },
+    ],
+  };
 }
 
 export interface OnChainListingState {

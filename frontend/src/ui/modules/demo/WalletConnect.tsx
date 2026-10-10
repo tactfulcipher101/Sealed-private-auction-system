@@ -6,6 +6,7 @@ import { WalletManager, type DiscoverySession, type PendingConnection, type Wall
 import type { ConnectedAztecWallet } from "@/lib/aztecWallet";
 import { getConfiguredChainInfo } from "@/lib/aztecWallet";
 import { hashToEmoji } from "@aztec/wallet-sdk/crypto";
+import { buildCapabilityManifest } from "@/lib/sealedAuction";
 
 interface WalletConnectProps {
   onConnected: (connection: ConnectedAztecWallet) => void;
@@ -84,6 +85,11 @@ export function WalletConnect({ onConnected }: WalletConnectProps) {
     try {
       const wallet = await pending.confirm();
       pendingRef.current = null;
+      try {
+        await wallet.requestCapabilities(buildCapabilityManifest());
+      } catch (capabilityError) {
+        console.warn("requestCapabilities failed:", capabilityError);
+      }
       const accounts = await wallet.getAccounts();
       if (accounts.length === 0) throw new Error("The connected wallet did not grant an account.");
 
