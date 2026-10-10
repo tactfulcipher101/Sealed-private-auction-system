@@ -84,7 +84,7 @@ export function ListingDetail({ listing, isOwnListing, connection, onEnterBiddin
       {listing.onChain ? (
         <div className="space-y-2 rounded-lg border border-emerald-500/25 bg-emerald-500/5 p-4">
           <p className="text-xs leading-relaxed text-emerald-100/80">
-            This listing was created on-chain. Bid submission and auction monitoring for deployed listings are not connected in this frontend yet.
+            This listing was created on-chain. A connected wallet can commit a sealed bid below. Reveal, settlement and claims are not wired into this frontend yet.
           </p>
           <p className="text-[11px] leading-5 text-slate-400">
             The descriptive metadata shown here is local to this browser session; it is not stored in the auction contract.
