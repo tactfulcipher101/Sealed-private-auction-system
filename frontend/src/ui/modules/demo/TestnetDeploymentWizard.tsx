@@ -151,7 +151,7 @@ export function TestnetDeploymentWizard() {
       <section className="space-y-4 rounded-xl border border-slate-800 bg-slate-900/40 p-5">
         <div>
           <h2 className="text-sm font-semibold text-slate-100">1. Deploy test token</h2>
-          <p className="mt-1 text-xs leading-5 text-slate-400">Deploys the repo’s `PrivateToken` fixture with its public faucet. Use it only under the TEST symbol; it is not a production asset.</p>
+          <p className="mt-1 text-xs leading-5 text-slate-400">Deploys the repo’s `PrivateToken` fixture with its private faucet. Use it only under the TEST symbol; it is not a production asset.</p>
         </div>
         {tokenDeployment ? (
           <div className="space-y-1 text-xs text-emerald-200"><p>Token address: <code className="break-all">{tokenDeployment.address}</code></p><p>Deployment tx: <code className="break-all">{tokenDeployment.transactionHash}</code></p></div>
