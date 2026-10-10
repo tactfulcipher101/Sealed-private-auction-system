@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Fr } from "@aztec/foundation/curves/bn254";
 import type { ConnectedAztecWallet } from "@/lib/aztecWallet";
 import { readListingOnChain } from "@/lib/sealedAuction";
+import { OnChainBidPanel } from "./OnChainBidPanel";
 
 interface ListingDetailProps {
   listing: Listing;
@@ -91,6 +92,7 @@ export function ListingDetail({ listing, isOwnListing, connection, onEnterBiddin
           {chainStatus?.id === listing.id && (
             <p className="font-mono text-[11px] text-emerald-200/80">{chainStatus.line}</p>
           )}
+          {connection && !isOwnListing && <OnChainBidPanel listing={listing} connection={connection} />}
           {listing.transactionHash && (
             <p className="break-all font-mono text-[10px] text-emerald-200/70">Transaction {listing.transactionHash}</p>
           )}
