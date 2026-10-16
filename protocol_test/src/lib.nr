@@ -3095,7 +3095,7 @@ unconstrained fn slash_after_pause_before_finalize_is_not_extended() {
     );
 }
 
-#[test(should_fail)]
+#[test(should_fail_with = "seller cannot bid on own listing")]
 unconstrained fn commit_bid_from_listing_seller_reverts() {
     let mut env = TestEnvironment::new();
     let verifier = env.create_light_account();
