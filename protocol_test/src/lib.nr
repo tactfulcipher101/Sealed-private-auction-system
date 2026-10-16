@@ -14,7 +14,7 @@ global BIDDER_A_FUNDS: u128 = 500;
 global BIDDER_B_FUNDS: u128 = 700;
 global TOKEN_AUTHWIT_NONCE: Field = 1;
 
-#[test(should_fail)]
+#[test(should_fail_with = "only the configured asset verifier may create listings")]
 unconstrained fn untrusted_account_cannot_create_a_verified_listing() {
     let mut env = TestEnvironment::new();
     let deployer = env.create_light_account();
@@ -66,7 +66,7 @@ unconstrained fn untrusted_account_cannot_create_a_verified_listing() {
     }
 }
 
-#[test(should_fail)]
+#[test(should_fail_with = "only the current asset verifier can rotate the role")]
 unconstrained fn untrusted_account_cannot_rotate_asset_verifier() {
     let mut env = TestEnvironment::new();
     let deployer = env.create_light_account();
@@ -538,7 +538,7 @@ unconstrained fn real_estate_winner_stake_returns_after_closing_and_loser_gets_b
 }
 
 
-#[test(should_fail)]
+#[test(should_fail_with = "closing has not been confirmed")]
 unconstrained fn real_estate_stake_claim_before_closing_confirmation_reverts() {
     let mut env = TestEnvironment::new();
     let seller = env.create_light_account();
@@ -919,7 +919,7 @@ unconstrained fn reveal_bid_for_wrong_bidder_reverts() {
 }
 
 
-#[test(should_fail)]
+#[test(should_fail_with = "bid was revealed; use the normal claim path")]
 unconstrained fn late_reveal_claim_after_relayer_reveal_reverts() {
     let mut env = TestEnvironment::new();
     let seller = env.create_light_account();
@@ -1087,7 +1087,7 @@ unconstrained fn settle_winning_bid_pays_seller_without_winner_then_stake_return
 }
 
 
-#[test(should_fail)]
+#[test(should_fail_with = "Balance too low")]
 unconstrained fn winner_claim_after_permissionless_settle_reverts() {
     let mut env = TestEnvironment::new();
     let seller = env.create_light_account();
@@ -1164,7 +1164,7 @@ unconstrained fn winner_claim_after_permissionless_settle_reverts() {
 }
 
 
-#[test(should_fail)]
+#[test(should_fail_with = "Balance too low")]
 unconstrained fn permissionless_settle_after_winner_claim_reverts() {
     let mut env = TestEnvironment::new();
     let seller = env.create_light_account();
@@ -1332,7 +1332,7 @@ unconstrained fn slash_after_legal_closing_deadline_pays_stake_to_seller() {
 }
 
 
-#[test(should_fail)]
+#[test(should_fail_with = "legal closing deadline has not passed")]
 unconstrained fn slash_before_legal_closing_deadline_reverts() {
     let mut env = TestEnvironment::new();
     let seller = env.create_light_account();
@@ -1410,7 +1410,7 @@ unconstrained fn slash_before_legal_closing_deadline_reverts() {
 }
 
 
-#[test(should_fail)]
+#[test(should_fail_with = "closing was confirmed")]
 unconstrained fn slash_after_confirm_closing_reverts() {
     let mut env = TestEnvironment::new();
     let seller = env.create_light_account();
@@ -1489,7 +1489,7 @@ unconstrained fn slash_after_confirm_closing_reverts() {
 }
 
 
-#[test(should_fail)]
+#[test(should_fail_with = "Balance too low")]
 unconstrained fn winner_stake_claim_after_slash_reverts() {
     let mut env = TestEnvironment::new();
     let seller = env.create_light_account();
@@ -1622,7 +1622,7 @@ unconstrained fn non_guardian_pause_vote_reverts() {
 }
 
 
-#[test(should_fail)]
+#[test(should_fail_with = "protocol is paused")]
 unconstrained fn paused_commit_bid_reverts() {
     let mut env = TestEnvironment::new();
     let seller = env.create_light_account();
@@ -1677,7 +1677,7 @@ unconstrained fn paused_commit_bid_reverts() {
 }
 
 
-#[test(should_fail)]
+#[test(should_fail_with = "protocol is paused")]
 unconstrained fn paused_reveal_reverts() {
     let mut env = TestEnvironment::new();
     let seller = env.create_light_account();
@@ -1866,7 +1866,7 @@ unconstrained fn paused_confirm_closing_reverts() {
 }
 
 
-#[test(should_fail)]
+#[test(should_fail_with = "protocol is paused")]
 unconstrained fn paused_slash_reverts() {
     let mut env = TestEnvironment::new();
     let seller = env.create_light_account();
@@ -2586,7 +2586,7 @@ unconstrained fn nobody_reveals_finalizes_with_no_winner_and_late_claim_refunds(
 }
 
 
-#[test(should_fail)]
+#[test(should_fail_with = "listing has no winner")]
 unconstrained fn settle_winning_bid_on_no_winner_auction_reverts() {
     let mut env = TestEnvironment::new();
     let seller = env.create_light_account();
@@ -2651,7 +2651,7 @@ unconstrained fn settle_winning_bid_on_no_winner_auction_reverts() {
 }
 
 
-#[test(should_fail)]
+#[test(should_fail_with = "bid is not claimable")]
 unconstrained fn losing_claim_on_unrevealed_bid_in_no_winner_auction_reverts() {
     let mut env = TestEnvironment::new();
     let seller = env.create_light_account();
@@ -2773,7 +2773,7 @@ unconstrained fn bidder_reveals_from_note_after_pause_extends_deadline() {
     assert_eq(treasury_balance, 3);
 }
 
-#[test(should_fail)]
+#[test(should_fail_with = "reveal deadline passed")]
 unconstrained fn reveal_before_pause_extended_deadline_reverts() {
     let mut env = TestEnvironment::new();
     let seller = env.create_light_account();
@@ -2820,7 +2820,7 @@ unconstrained fn reveal_before_pause_extended_deadline_reverts() {
         SealedAuction::at(auction).reveal_bid(7002),
     );
 }
-#[test(should_fail)]
+#[test(should_fail_with = "legal closing deadline has not passed")]
 unconstrained fn slash_before_pause_extended_legal_deadline_reverts() {
     let mut env = TestEnvironment::new();
     let seller = env.create_light_account();
@@ -2928,7 +2928,7 @@ unconstrained fn constructor_fee_parameter_sets_settlement_fee() {
     assert_eq(treasury_balance, 5);
 }
 
-#[test(should_fail)]
+#[test(should_fail_with = "settlement fee exceeds 1000 basis points")]
 unconstrained fn constructor_rejects_fee_above_bound() {
     let mut env = TestEnvironment::new();
     let deployer = env.create_light_account();
