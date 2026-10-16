@@ -11,6 +11,7 @@ import { BidCommitForm } from "./BidCommitForm";
 import { LiveAuctionRoom } from "./LiveAuctionRoom";
 import { SettlementReveal } from "./SettlementReveal";
 import { SellAssetForm } from "./SellAssetForm";
+import { ConfirmClosingPanel } from "./ConfirmClosingPanel";
 
 type DemoStep = "catalog" | "sell" | "listing" | "bidding" | "live" | "settled";
 
@@ -117,6 +118,8 @@ export function AuctionDemo() {
           highlightId={justListedId}
         />
       )}
+
+      {step === "catalog" && <ConfirmClosingPanel connection={connection} />}
 
       {step === "sell" && (
         <SellAssetForm

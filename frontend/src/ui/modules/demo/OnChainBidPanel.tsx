@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { Listing } from "@/lib/demoData";
 import type { ConnectedAztecWallet } from "@/lib/aztecWallet";
-import { commitBidOnChain, type CommittedBid } from "@/lib/sealedAuction";
+import { commitBidOnChain, faucetTestTokens, type CommittedBid } from "@/lib/sealedAuction";
 
 interface OnChainBidPanelProps {
   listing: Listing;
@@ -15,6 +15,27 @@ export function OnChainBidPanel({ listing, connection }: OnChainBidPanelProps) {
   const [isSending, setIsSending] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [committed, setCommitted] = useState<CommittedBid | null>(null);
+  const [faucetText, setFaucetText] = useState("1000");
+  const [faucetStatus, setFaucetStatus] = useState<string | null>(null);
+  const [isFauceting, setIsFauceting] = useState(false);
+
+  async function handleFaucet() {
+    setErrorText(null);
+    setFaucetStatus(null);
+    if (!/^[0-9]+$/.test(faucetText)) {
+      setErrorText("Enter the faucet amount as a whole number.");
+      return;
+    }
+    setIsFauceting(true);
+    try {
+      const faucetTxHash = await faucetTestTokens(connection, listing.currency as Parameters<typeof faucetTestTokens>[1], BigInt(faucetText));
+      setFaucetStatus("Faucet tx " + faucetTxHash);
+    } catch (error) {
+      setErrorText(error instanceof Error ? error.message : "Faucet failed.");
+    } finally {
+      setIsFauceting(false);
+    }
+  }
 
   async function handleCommit() {
     setErrorText(null);
@@ -41,6 +62,11 @@ export function OnChainBidPanel({ listing, connection }: OnChainBidPanelProps) {
   return (
     <div className="space-y-3 rounded-lg border border-slate-800 bg-slate-950/60 p-4">
       <p className="text-xs font-medium text-slate-200">Commit a sealed bid on chain (test token)</p>
+      <div className="flex gap-2">
+        <input type="text" inputMode="numeric" value={faucetText} onChange={(event) => setFaucetText(event.target.value)} disabled={isFauceting} className="w-24 rounded-lg border border-slate-800 bg-slate-950 px-2 py-1 text-xs text-slate-100" />
+        <button type="button" onClick={() => void handleFaucet()} disabled={isFauceting || isSending} className="flex-1 rounded-lg border border-slate-700 py-1 text-xs text-slate-100 disabled:opacity-50">{isFauceting ? "Minting test tokens..." : "Get test tokens"}</button>
+      </div>
+      {faucetStatus && <p className="break-all font-mono text-[10px] text-emerald-200/80">{faucetStatus}</p>}
       <input
         type="text"
         inputMode="numeric"

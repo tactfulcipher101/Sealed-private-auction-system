@@ -27,8 +27,8 @@ export function SellAssetForm({ connection, onListingCreated, onCancel }: SellAs
   const [sellerAddress, setSellerAddress] = useState("");
   const [stakePercent, setStakePercent] = useState("10");
   const [legalClosingDays, setLegalClosingDays] = useState("7");
-  const [closeAfterHours, setCloseAfterHours] = useState("24");
-  const [revealWindowHours, setRevealWindowHours] = useState("24");
+  const [closeAfterMinutes, setCloseAfterMinutes] = useState("60");
+  const [revealWindowMinutes, setRevealWindowMinutes] = useState("60");
   const [operatorAttestation, setOperatorAttestation] = useState(false);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -63,8 +63,8 @@ export function SellAssetForm({ connection, onListingCreated, onCancel }: SellAs
     const parsedReserve = Number(reservePrice);
     const parsedStakePercent = Number(stakePercent);
     const parsedClosingDays = Number(legalClosingDays);
-    const parsedCloseHours = Number(closeAfterHours);
-    const parsedRevealHours = Number(revealWindowHours);
+    const parsedCloseMinutes = Number(closeAfterMinutes);
+    const parsedRevealMinutes = Number(revealWindowMinutes);
     if (!title.trim() || !region.trim() || !description.trim() || !sellerAddress.trim() || !Number.isSafeInteger(parsedReserve) || parsedReserve <= 0) {
       setError("Complete the listing details, seller address, and positive reserve price.");
       return;
@@ -73,8 +73,8 @@ export function SellAssetForm({ connection, onListingCreated, onCancel }: SellAs
       setError("Confirm the asset has been verified before submitting the operator attestation.");
       return;
     }
-    if (!Number.isSafeInteger(parsedCloseHours) || !Number.isSafeInteger(parsedRevealHours) || parsedCloseHours < 1 || parsedRevealHours < 1) {
-      setError("Closing and reveal windows must be positive whole numbers of hours.");
+    if (!Number.isSafeInteger(parsedCloseMinutes) || !Number.isSafeInteger(parsedRevealMinutes) || parsedCloseMinutes < 5 || parsedRevealMinutes < 1) {
+      setError("Closing window must be at least 5 whole minutes and the reveal window at least 1 whole minute.");
       return;
     }
     const categoryStakeBps = category === "real-estate" ? Math.round(parsedStakePercent * 100) : 0;
@@ -86,8 +86,8 @@ export function SellAssetForm({ connection, onListingCreated, onCancel }: SellAs
     }
 
     const now = Math.floor(Date.now() / 1000);
-    const closeTimestamp = now + parsedCloseHours * 3600;
-    const revealDeadline = closeTimestamp + parsedRevealHours * 3600;
+    const closeTimestamp = now + parsedCloseMinutes * 60;
+    const revealDeadline = closeTimestamp + parsedRevealMinutes * 60;
     setIsSubmitting(true);
     try {
       const listing = await createVerifiedListing(connection, {
@@ -267,24 +267,24 @@ export function SellAssetForm({ connection, onListingCreated, onCancel }: SellAs
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
-            <label className="mb-2 block text-xs font-medium text-slate-300">Auction closes in (hours)</label>
+            <label className="mb-2 block text-xs font-medium text-slate-300">Auction closes in (minutes, 5 or more)</label>
             <input
               type="number"
-              min="1"
+              min="5"
               step="1"
-              value={closeAfterHours}
-              onChange={(event) => setCloseAfterHours(event.target.value)}
+              value={closeAfterMinutes}
+              onChange={(event) => setCloseAfterMinutes(event.target.value)}
               className="w-full rounded-lg border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-100"
             />
           </div>
           <div>
-            <label className="mb-2 block text-xs font-medium text-slate-300">Reveal window (hours)</label>
+            <label className="mb-2 block text-xs font-medium text-slate-300">Reveal window (minutes)</label>
             <input
               type="number"
               min="1"
               step="1"
-              value={revealWindowHours}
-              onChange={(event) => setRevealWindowHours(event.target.value)}
+              value={revealWindowMinutes}
+              onChange={(event) => setRevealWindowMinutes(event.target.value)}
               className="w-full rounded-lg border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-100"
             />
           </div>
