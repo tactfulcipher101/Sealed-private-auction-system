@@ -39,14 +39,15 @@ Listing creation is gated by an allowlisted operator model. Only the current ass
 
 - Use Node.js 24 or later for Aztec TXE tests. `aztec compile` works under Node.js 20.
 - Compile: `aztec compile --workspace`
-- Test: `cd protocol_test && TXE_WORKERS=1 aztec test`. The contract suite has 43 tests, and a full run takes 30 to 60+ minutes. Do not interrupt it.
+- Test: `cd protocol_test && TXE_WORKERS=1 aztec test`. The contract suite has 44 tests. The 2026-10-05 full run recorded 43 passing; the 44th, commit_bid_from_listing_seller_reverts, passes in isolation on 5.0.0 and has not been part of a full run. A full run takes 30 to 60+ minutes. Do not interrupt it.
 - Three `should_fail` tests and one regression test were mutation-checked: each fails when its guarded logic is removed.
+- Compiling against aztec-nr 5.2.0 instead of 5.0.0 succeeds but prints 148 compiler bug diagnostics, all located in aztec-nr library files. It is not known whether they matter. The 5.0.0 compile prints none of them.
 
 ## Frontend and deployment
 
 Compile the workspace before starting or building the frontend. The frontend copies the generated artifacts into its ignored public artifact directory before `npm run dev` or `npm run build`.
 
-The frontend defaults to the Aztec testnet endpoint `https://v5.testnet.rpc.aztec-labs.com`, Sepolia chain ID `11155111` and explorer `https://testnet.aztecscan.xyz`. The Sponsored FPC address is `0x130925fbd734a252e3d8ddff87f6c346052dd2`, but this frontend does not submit Sponsored FPC fee calls. The browser wallet must already hold Fee Juice.
+The frontend defaults to the Aztec testnet endpoint `https://v5.testnet.rpc.aztec-labs.com`, Sepolia chain ID `11155111` and explorer `https://testnet.aztecscan.xyz`. The Sponsored FPC address is `0x0628377e98bca5913dc86765ad0758f7b7aa83eac49079c6fba125807b393fe1`, but this frontend does not submit Sponsored FPC fee calls. The browser wallet must already hold Fee Juice.
 
 The wizard at `/deploy` deploys the test token and `SealedAuction`, then prints the addresses as an env snippet. It passes the connected account as the asset verifier. It compares the artifact's Aztec version with the live node and blocks deployment if they differ.
 
