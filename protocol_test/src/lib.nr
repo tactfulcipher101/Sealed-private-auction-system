@@ -737,7 +737,7 @@ unconstrained fn relayer_reveals_for_both_bidders_then_normal_claims() {
 }
 
 
-#[test(should_fail)]
+#[test(should_fail_with = "commitment not found")]
 unconstrained fn reveal_bid_for_wrong_salt_reverts() {
     let mut env = TestEnvironment::new();
     let seller = env.create_light_account();
@@ -798,7 +798,7 @@ unconstrained fn reveal_bid_for_wrong_salt_reverts() {
 }
 
 
-#[test(should_fail)]
+#[test(should_fail_with = "commitment not found")]
 unconstrained fn reveal_bid_for_wrong_amount_reverts() {
     let mut env = TestEnvironment::new();
     let seller = env.create_light_account();
@@ -858,7 +858,7 @@ unconstrained fn reveal_bid_for_wrong_amount_reverts() {
 }
 
 
-#[test(should_fail)]
+#[test(should_fail_with = "commitment not found")]
 unconstrained fn reveal_bid_for_wrong_bidder_reverts() {
     let mut env = TestEnvironment::new();
     let seller = env.create_light_account();
@@ -1600,7 +1600,7 @@ unconstrained fn pause_and_unpause_each_need_the_threshold_of_guardians() {
 }
 
 
-#[test(should_fail)]
+#[test(should_fail_with = "only a pause guardian can vote")]
 unconstrained fn non_guardian_pause_vote_reverts() {
     let mut env = TestEnvironment::new();
     let seller = env.create_light_account();
@@ -1739,7 +1739,7 @@ unconstrained fn paused_reveal_reverts() {
 }
 
 
-#[test(should_fail)]
+#[test(should_fail_with = "protocol is paused")]
 unconstrained fn paused_finalize_reverts() {
     let mut env = TestEnvironment::new();
     let seller = env.create_light_account();
@@ -1802,7 +1802,7 @@ unconstrained fn paused_finalize_reverts() {
 }
 
 
-#[test(should_fail)]
+#[test(should_fail_with = "protocol is paused")]
 unconstrained fn paused_confirm_closing_reverts() {
     let mut env = TestEnvironment::new();
     let seller = env.create_light_account();
@@ -2130,7 +2130,7 @@ unconstrained fn late_reveal_refund_still_works_while_paused() {
 }
 
 
-#[test(should_fail)]
+#[test(should_fail_with = "auction is closed")]
 unconstrained fn commit_bid_after_close_reverts() {
     let mut env = TestEnvironment::new();
     let seller = env.create_light_account();
@@ -2181,7 +2181,7 @@ unconstrained fn commit_bid_after_close_reverts() {
 }
 
 
-#[test(should_fail)]
+#[test(should_fail_with = "bid already claimed")]
 unconstrained fn double_claim_of_losing_bid_reverts() {
     let mut env = TestEnvironment::new();
     let seller = env.create_light_account();
@@ -2268,7 +2268,7 @@ unconstrained fn double_claim_of_losing_bid_reverts() {
 }
 
 
-#[test(should_fail)]
+#[test(should_fail_with = "bid already claimed")]
 unconstrained fn double_claim_of_winning_bid_reverts() {
     let mut env = TestEnvironment::new();
     let seller = env.create_light_account();
