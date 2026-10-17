@@ -10,6 +10,7 @@ import type { AuthWitness } from "@aztec/stdlib/auth-witness";
 import { getConfiguredChainInfo, type ConnectedAztecWallet } from "@/lib/aztecWallet";
 import type { Listing } from "@/lib/demoData";
 import { getNetworkConfig, type SupportedCurrency } from "@/lib/network";
+import { ON_CHAIN_LISTING_METADATA } from "@/lib/onChainListings";
 
 export type AuctionArtifact = ContractArtifact & {
   aztec_version?: string;
@@ -444,4 +445,69 @@ export async function confirmClosingOnChain(connection: ConnectedAztecWallet, li
     throw new Error(receipt.error ?? "confirm_closing did not execute successfully.");
   }
   return receipt.txHash.toString();
+}
+
+export interface LoadedOnChainListings {
+  listings: Listing[];
+  skipped: string[];
+}
+
+function readAddressText(value: unknown): string | null {
+  const text = typeof value === "string" ? value : value ? String(value) : "";
+  return /^0x[0-9a-fA-F]{64}$/.test(text) ? text : null;
+}
+
+export async function loadOnChainListings(connection: ConnectedAztecWallet): Promise<LoadedOnChainListings> {
+  await assertSealedAuctionFunction("get_listing");
+  const config = getNetworkConfig();
+  const auctionAddress = configuredAddress(config.contractAddress, "Auction contract");
+  const connectedAddress = configuredAddress(connection.address, "Connected account");
+  const artifact = await getSealedAuctionArtifact();
+  await registerAuctionWithWallet(connection, artifact, auctionAddress);
+  const auction = Contract.at(auctionAddress, artifact, connection.wallet);
+  const methods = auction.methods as unknown as SealedAuctionMethods;
+  const listings: Listing[] = [];
+  const skipped: string[] = [];
+  for (const metadata of ON_CHAIN_LISTING_METADATA) {
+    try {
+      const { result } = await methods.get_listing(Fr.fromString(metadata.id)).simulate({ from: connectedAddress });
+      const info = result as {
+        seller?: unknown;
+        reserve_price?: unknown;
+        verified?: unknown;
+        category?: unknown;
+        stake_bps?: unknown;
+        legal_closing_window?: unknown;
+      } | null | undefined;
+      const sellerText = info ? readAddressText(info.seller) : null;
+      if (
+        !info ||
+        !sellerText ||
+        info.verified !== true ||
+        typeof info.reserve_price !== "bigint" ||
+        typeof info.category !== "bigint" ||
+        typeof info.stake_bps !== "bigint" ||
+        typeof info.legal_closing_window !== "bigint"
+      ) {
+        throw new Error("get_listing returned an unexpected value.");
+      }
+      listings.push({
+        id: metadata.id,
+        title: metadata.title,
+        category: info.category === BigInt(1) ? "real-estate" : "mobile-goods",
+        region: metadata.region,
+        description: metadata.description,
+        reservePrice: Number(info.reserve_price),
+        stakeBps: Number(info.stake_bps),
+        legalClosingWindowSeconds: Number(info.legal_closing_window),
+        currency: "TEST",
+        verifiedBy: "Configured on-chain asset verifier",
+        sellerWalletAddress: sellerText,
+        onChain: true,
+      });
+    } catch (error) {
+      skipped.push(metadata.title + ": " + (error instanceof Error ? error.message : "read failed"));
+    }
+  }
+  return { listings, skipped };
 }

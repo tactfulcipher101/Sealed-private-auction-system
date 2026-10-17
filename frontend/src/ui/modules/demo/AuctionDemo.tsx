@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Gavel, Tags, LogOut } from "lucide-react";
 import { demoListings, type Listing, type SimulatedBid } from "@/lib/demoData";
 import type { ConnectedAztecWallet } from "@/lib/aztecWallet";
@@ -12,6 +12,7 @@ import { LiveAuctionRoom } from "./LiveAuctionRoom";
 import { SettlementReveal } from "./SettlementReveal";
 import { SellAssetForm } from "./SellAssetForm";
 import { ConfirmClosingPanel } from "./ConfirmClosingPanel";
+import { loadOnChainListings } from "@/lib/sealedAuction";
 
 type DemoStep = "catalog" | "sell" | "listing" | "bidding" | "live" | "settled";
 
@@ -23,6 +24,7 @@ export function AuctionDemo() {
   const [userBid, setUserBid] = useState<SimulatedBid | null>(null);
   const [finalBids, setFinalBids] = useState<SimulatedBid[]>([]);
   const [justListedId, setJustListedId] = useState<string | null>(null);
+  const [loaderNote, setLoaderNote] = useState<string | null>(null);
 
   function handleSelectListing(listing: Listing) {
     setSelectedListing(listing);
@@ -62,6 +64,27 @@ export function AuctionDemo() {
     setStep("catalog");
   }
 
+  useEffect(() => {
+      if (!connection) return;
+      const activeConnection = connection;
+      let cancelled = false;
+      void loadOnChainListings(activeConnection)
+        .then((result) => {
+          if (cancelled) return;
+          setListings((current) => {
+            const knownIds = new Set(current.map((entry) => entry.id));
+            return [...result.listings.filter((entry) => !knownIds.has(entry.id)), ...current];
+          });
+          setLoaderNote(result.skipped.length > 0 ? "Could not read on-chain listing: " + result.skipped.join("; ") : null);
+        })
+        .catch((error: unknown) => {
+          if (!cancelled) setLoaderNote("Could not load on-chain listings: " + (error instanceof Error ? error.message : "read failed"));
+        });
+      return () => {
+        cancelled = true;
+      };
+    }, [connection]);
+
   const isOwnListing = selectedListing?.sellerWalletAddress === connection?.address;
 
   if (!connection) {
@@ -87,6 +110,10 @@ export function AuctionDemo() {
       <p className="mb-8 rounded-lg border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-xs leading-5 text-amber-100/80">
         Wallet connected. Verifier-authorized listing creation submits to the configured contract; existing catalog entries and bidding/settlement flows are previews.
       </p>
+
+      {loaderNote && (
+        <p className="mb-8 text-xs leading-5 text-amber-200/80">{loaderNote}</p>
+      )}
 
       {(step === "catalog" || step === "sell") && (
         <div className="flex gap-2 mb-8 p-1 rounded-lg bg-slate-900/60 border border-slate-800 w-fit mx-auto">
