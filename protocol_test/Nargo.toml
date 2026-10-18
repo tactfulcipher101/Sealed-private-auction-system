@@ -3,6 +3,6 @@ name = "protocol_test"
 type = "lib"
 
 [dependencies]
-aztec = { git = "https://github.com/AztecProtocol/aztec-nr", tag = "v5.0.0", directory = "aztec" }
+aztec = { git = "https://github.com/aztec-labs-eng/aztec-nr", tag = "v6.0.0-rc.3", directory = "aztec" }
 sealed_auction = { path = "../protocol" }
 private_token = { path = "../private_token" }
