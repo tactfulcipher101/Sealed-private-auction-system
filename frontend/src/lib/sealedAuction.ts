@@ -96,6 +96,16 @@ interface SealedAuctionMethods {
       receipt: { hasExecutionSucceeded: () => boolean; error?: string; txHash: { toString: () => string } };
     }>;
   };
+  close_auction: (listing_id: Fr) => {
+    send: (options: { from: AztecAddress }) => Promise<{
+      receipt: { hasExecutionSucceeded: () => boolean; error?: string; txHash: { toString: () => string } };
+    }>;
+  };
+  finalize_settlement: (listing_id: Fr) => {
+    send: (options: { from: AztecAddress }) => Promise<{
+      receipt: { hasExecutionSucceeded: () => boolean; error?: string; txHash: { toString: () => string } };
+    }>;
+  };
   create_listing: (...args: unknown[]) => {
     send: (options: { from: AztecAddress }) => Promise<{
       receipt: { hasExecutionSucceeded: () => boolean; error?: string; txHash: { toString: () => string } };
@@ -510,4 +520,35 @@ export async function loadOnChainListings(connection: ConnectedAztecWallet): Pro
     }
   }
   return { listings, skipped };
+}
+
+async function sendPublicListingCall(
+  connection: ConnectedAztecWallet,
+  functionName: "close_auction" | "finalize_settlement",
+  listingIdHex: string,
+): Promise<string> {
+  if (!/^0x[0-9a-fA-F]{64}$/.test(listingIdHex)) {
+    throw new Error("Listing id must be 0x followed by 64 hex characters.");
+  }
+  await assertSealedAuctionFunction(functionName);
+  const config = getNetworkConfig();
+  const auctionAddress = configuredAddress(config.contractAddress, "Auction contract");
+  const connectedAddress = configuredAddress(connection.address, "Connected account");
+  const artifact = await getSealedAuctionArtifact();
+  await registerAuctionWithWallet(connection, artifact, auctionAddress);
+  const auction = Contract.at(auctionAddress, artifact, connection.wallet);
+  const methods = auction.methods as unknown as SealedAuctionMethods;
+  const { receipt } = await methods[functionName](Fr.fromString(listingIdHex)).send({ from: connectedAddress });
+  if (!receipt.hasExecutionSucceeded()) {
+    throw new Error(receipt.error ?? functionName + " did not execute successfully.");
+  }
+  return receipt.txHash.toString();
+}
+
+export function closeAuctionOnChain(connection: ConnectedAztecWallet, listingIdHex: string): Promise<string> {
+  return sendPublicListingCall(connection, "close_auction", listingIdHex);
+}
+
+export function finalizeSettlementOnChain(connection: ConnectedAztecWallet, listingIdHex: string): Promise<string> {
+  return sendPublicListingCall(connection, "finalize_settlement", listingIdHex);
 }

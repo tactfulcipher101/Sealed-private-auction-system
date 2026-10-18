@@ -12,6 +12,7 @@ import { LiveAuctionRoom } from "./LiveAuctionRoom";
 import { SettlementReveal } from "./SettlementReveal";
 import { SellAssetForm } from "./SellAssetForm";
 import { ConfirmClosingPanel } from "./ConfirmClosingPanel";
+import { SettlementStepsPanel } from "./SettlementStepsPanel";
 import { loadOnChainListings } from "@/lib/sealedAuction";
 
 type DemoStep = "catalog" | "sell" | "listing" | "bidding" | "live" | "settled";
@@ -147,6 +148,8 @@ export function AuctionDemo() {
       )}
 
       {step === "catalog" && <ConfirmClosingPanel connection={connection} />}
+
+      {step === "catalog" && <SettlementStepsPanel connection={connection} />}
 
       {step === "sell" && (
         <SellAssetForm

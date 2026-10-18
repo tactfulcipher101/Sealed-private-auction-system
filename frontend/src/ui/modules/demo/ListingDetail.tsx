@@ -16,7 +16,7 @@ interface ListingDetailProps {
 }
 
 export function ListingDetail({ listing, isOwnListing, connection, onEnterBidding, onBack }: ListingDetailProps) {
-  const [chainStatus, setChainStatus] = useState<{ id: string; line: string } | null>(null);
+  const [chainStatus, setChainStatus] = useState<{ id: string; line: string; open: boolean } | null>(null);
 
   useEffect(() => {
     if (!listing.onChain || !connection) return;
@@ -27,11 +27,11 @@ export function ListingDetail({ listing, isOwnListing, connection, onEnterBiddin
       try {
         const state = await readListingOnChain(activeConnection, Fr.fromString(targetListingId));
         if (!cancelled) {
-          setChainStatus({ id: targetListingId, line: `Chain status: ${state.statusLabel}, close timestamp ${state.closeTimestamp}` });
+          setChainStatus({ id: targetListingId, line: `Chain status: ${state.statusLabel}, close timestamp ${state.closeTimestamp}`, open: state.status === BigInt(1) });
         }
       } catch (error) {
         if (!cancelled) {
-          setChainStatus({ id: targetListingId, line: `Chain status unavailable: ${error instanceof Error ? error.message : "read failed"}` });
+          setChainStatus({ id: targetListingId, line: `Chain status unavailable: ${error instanceof Error ? error.message : "read failed"}`, open: true });
         }
       }
     };
@@ -92,7 +92,7 @@ export function ListingDetail({ listing, isOwnListing, connection, onEnterBiddin
           {chainStatus?.id === listing.id && (
             <p className="font-mono text-[11px] text-emerald-200/80">{chainStatus.line}</p>
           )}
-          {connection && !isOwnListing && <OnChainBidPanel listing={listing} connection={connection} />}
+          {connection && !isOwnListing && chainStatus?.id === listing.id && chainStatus.open && <OnChainBidPanel listing={listing} connection={connection} />}
           {listing.transactionHash && (
             <p className="break-all font-mono text-[10px] text-emerald-200/70">Transaction {listing.transactionHash}</p>
           )}
