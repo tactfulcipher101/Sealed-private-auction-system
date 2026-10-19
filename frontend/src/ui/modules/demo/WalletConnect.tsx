@@ -2,10 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { AlertCircle, Check, Loader2, ShieldCheck, Wallet, X } from "lucide-react";
-import { WalletManager, type DiscoverySession, type PendingConnection, type WalletProvider } from "@aztec/wallet-sdk/manager";
+import { WalletManager, type DiscoverySession, type PendingConnection, type WalletProvider } from "@aztec-labs/wallet-sdk/manager";
 import type { ConnectedAztecWallet } from "@/lib/aztecWallet";
 import { getConfiguredChainInfo } from "@/lib/aztecWallet";
-import { hashToEmoji } from "@aztec/wallet-sdk/crypto";
+import { hashToEmoji } from "@aztec-labs/wallet-sdk/crypto";
 import { buildCapabilityManifest } from "@/lib/sealedAuction";
 
 interface WalletConnectProps {

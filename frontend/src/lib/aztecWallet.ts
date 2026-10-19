@@ -1,7 +1,7 @@
-import { createAztecNodeClient } from "@aztec/aztec.js/node";
-import type { Wallet } from "@aztec/aztec.js/wallet";
-import { Fr } from "@aztec/foundation/curves/bn254";
-import type { WalletProvider } from "@aztec/wallet-sdk/manager";
+import { createAztecNodeClient } from "@aztec-labs/aztec.js/node";
+import type { Wallet } from "@aztec-labs/aztec.js/wallet";
+import { Fr } from "@aztec-labs/foundation/curves/bn254";
+import type { WalletProvider } from "@aztec-labs/wallet-sdk/manager";
 import { getNetworkConfig } from "@/lib/network";
 
 export interface ConnectedAztecWallet {
@@ -26,6 +26,6 @@ export async function getConfiguredNodeInfo() {
     throw new Error(`Set NEXT_PUBLIC_AZTEC_${config.mode.toUpperCase()}_NODE_URL to connect a wallet.`);
   }
 
-  const node = createAztecNodeClient(config.nodeUrl);
+  const node = createAztecNodeClient(config.nodeUrl, { maxBatchSize: 3 });
   return await node.getNodeInfo();
 }

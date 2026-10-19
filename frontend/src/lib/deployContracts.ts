@@ -1,8 +1,8 @@
-import { Contract } from "@aztec/aztec.js/contracts";
-import { AztecAddress } from "@aztec/aztec.js/addresses";
-import type { ContractArtifact } from "@aztec/stdlib/abi";
-import { Fr } from "@aztec/foundation/curves/bn254";
-import { deriveKeys } from "@aztec/stdlib/keys";
+import { Contract } from "@aztec-labs/aztec.js/contracts";
+import { AztecAddress } from "@aztec-labs/aztec.js/addresses";
+import type { ContractArtifact } from "@aztec-labs/stdlib/abi";
+import { Fr } from "@aztec-labs/foundation/curves/bn254";
+import { deriveKeys } from "@aztec-labs/stdlib/keys";
 import { getConfiguredChainInfo, getConfiguredNodeInfo, type ConnectedAztecWallet } from "@/lib/aztecWallet";
 
 export interface DeploymentResult {

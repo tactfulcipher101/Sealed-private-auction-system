@@ -2,7 +2,7 @@ import { ArrowLeft, ShieldCheck, EyeOff, Ban } from "lucide-react";
 import type { Listing } from "@/lib/demoData";
 import { formatCurrency } from "@/lib/demoCrypto";
 import { useEffect, useState } from "react";
-import { Fr } from "@aztec/foundation/curves/bn254";
+import { Fr } from "@aztec-labs/foundation/curves/bn254";
 import type { ConnectedAztecWallet } from "@/lib/aztecWallet";
 import { readListingOnChain } from "@/lib/sealedAuction";
 import { OnChainBidPanel } from "./OnChainBidPanel";
