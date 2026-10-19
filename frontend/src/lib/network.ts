@@ -49,9 +49,9 @@ function createConfig(
   return {
     mode,
     label: mode === "testnet" ? "Aztec Testnet" : "Aztec Mainnet",
-    nodeUrl: envValue(values.nodeUrl) ?? (mode === "testnet" ? "https://v5.testnet.rpc.aztec-labs.com" : null),
+    nodeUrl: envValue(values.nodeUrl) ?? (mode === "testnet" ? "https://aztec-testnet.drpc.org" : null),
     explorerUrl: envValue(values.explorerUrl) ?? (mode === "testnet" ? "https://testnet.aztecscan.xyz" : null),
-    sponsoredFpcAddress: envValue(values.sponsoredFpcAddress) ?? (mode === "testnet" ? "0x0628377e98bca5913dc86765ad0758f7b7aa83eac49079c6fba125807b393fe1" : null),
+    sponsoredFpcAddress: envValue(values.sponsoredFpcAddress) ?? (mode === "testnet" ? "0x2adfb70e860909f0db8268b3fec80bce52a94559963444f5c0341816b8412130" : null),
     contractAddress: envValue(values.contractAddress),
     assetVerifierAddress: envValue(values.assetVerifierAddress),
     treasuryAddress: envValue(values.treasuryAddress),
