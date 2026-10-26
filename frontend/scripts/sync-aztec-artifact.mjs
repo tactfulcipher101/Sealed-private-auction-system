@@ -6,6 +6,7 @@ const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const workspaceDirectory = resolve(scriptDirectory, "../..");
 const artifacts = ["sealed_auction-SealedAuction.json", "private_token-PrivateToken.json"];
 const isHostedBuild = Boolean(process.env.VERCEL || process.env.CI);
+const vendoredArtifacts = ["sponsored_fpc_contract-SponsoredFPC.json"];
 
 await mkdir(resolve(scriptDirectory, "../public/artifacts"), { recursive: true });
 for (const artifact of artifacts) {
@@ -24,4 +25,7 @@ for (const artifact of artifacts) {
     }
     throw error;
   }
+}
+for (const artifact of vendoredArtifacts) {
+  await copyFile(resolve(scriptDirectory, "../vendored-artifacts", artifact), resolve(scriptDirectory, "../public/artifacts", artifact));
 }
