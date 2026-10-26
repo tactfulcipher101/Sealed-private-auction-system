@@ -11,6 +11,7 @@ import { getConfiguredChainInfo, type ConnectedAztecWallet } from "@/lib/aztecWa
 import type { Listing } from "@/lib/demoData";
 import { getNetworkConfig, type SupportedCurrency } from "@/lib/network";
 import { ON_CHAIN_LISTING_METADATA } from "@/lib/onChainListings";
+import { SponsoredFeePaymentMethod } from "@aztec-labs/aztec.js/fee";
 
 export type AuctionArtifact = ContractArtifact & {
   aztec_version?: string;
@@ -92,25 +93,47 @@ interface SealedAuctionMethods {
     simulate: (options: { from: AztecAddress }) => Promise<{ result: unknown }>;
   };
   confirm_closing: (listing_id: Fr) => {
-    send: (options: { from: AztecAddress }) => Promise<{
+    send: (options: { from: AztecAddress; fee?: { paymentMethod: SponsoredFeePaymentMethod } }) => Promise<{
       receipt: { hasExecutionSucceeded: () => boolean; error?: string; txHash: { toString: () => string } };
     }>;
   };
   close_auction: (listing_id: Fr) => {
-    send: (options: { from: AztecAddress }) => Promise<{
+    send: (options: { from: AztecAddress; fee?: { paymentMethod: SponsoredFeePaymentMethod } }) => Promise<{
       receipt: { hasExecutionSucceeded: () => boolean; error?: string; txHash: { toString: () => string } };
     }>;
   };
   finalize_settlement: (listing_id: Fr) => {
-    send: (options: { from: AztecAddress }) => Promise<{
+    send: (options: { from: AztecAddress; fee?: { paymentMethod: SponsoredFeePaymentMethod } }) => Promise<{
       receipt: { hasExecutionSucceeded: () => boolean; error?: string; txHash: { toString: () => string } };
     }>;
   };
   create_listing: (...args: unknown[]) => {
-    send: (options: { from: AztecAddress }) => Promise<{
+    send: (options: { from: AztecAddress; fee?: { paymentMethod: SponsoredFeePaymentMethod } }) => Promise<{
       receipt: { hasExecutionSucceeded: () => boolean; error?: string; txHash: { toString: () => string } };
     }>;
   };
+}
+
+const walletsWithSponsorRegistered = new WeakSet<object>();
+let sponsorArtifactPromise: Promise<ContractArtifact> | null = null;
+
+async function getSponsorFeePayment(connection: ConnectedAztecWallet): Promise<SponsoredFeePaymentMethod> {
+  const config = getNetworkConfig();
+  if (!config.nodeUrl) throw new Error("Node URL is not configured.");
+  if (!config.sponsoredFpcAddress) throw new Error("Sponsored FPC address is not configured.");
+  const sponsorAddress = configuredAddress(config.sponsoredFpcAddress, "Sponsored FPC");
+  if (!walletsWithSponsorRegistered.has(connection.wallet)) {
+    sponsorArtifactPromise ??= fetch("/artifacts/sponsored_fpc_contract-SponsoredFPC.json").then(async (response) => {
+      if (!response.ok) throw new Error("Sponsored FPC artifact is missing.");
+      return loadContractArtifact(await response.json());
+    });
+    const artifact = await sponsorArtifactPromise;
+    const instance = await createAztecNodeClient(config.nodeUrl, { maxBatchSize: 3 }).getContract(sponsorAddress);
+    if (!instance) throw new Error("The Sponsored FPC instance was not found on the configured node.");
+    await connection.wallet.registerContract(instance, artifact);
+    walletsWithSponsorRegistered.add(connection.wallet);
+  }
+  return new SponsoredFeePaymentMethod(sponsorAddress);
 }
 
 const walletsWithAuctionRegistered = new WeakSet<object>();
@@ -279,7 +302,7 @@ export async function createVerifiedListing(
     categoryId,
     BigInt(input.stakeBps),
     BigInt(input.legalClosingWindowSeconds),
-  ).send({ from: connectedAddress });
+  ).send({ from: connectedAddress, fee: { paymentMethod: await getSponsorFeePayment(connection) } });
   if (!receipt.hasExecutionSucceeded()) {
     throw new Error(receipt.error ?? "The listing transaction did not execute successfully.");
   }
@@ -329,7 +352,7 @@ interface PrivateTokenPullMethods {
 
 interface CommitBidMethods {
   commit_bid: (listingId: Fr, amount: bigint, salt: Fr, tokenAuthwitNonce: Fr) => {
-    send: (options: { from: AztecAddress; authWitnesses: AuthWitness[] }) => Promise<{
+    send: (options: { from: AztecAddress; authWitnesses: AuthWitness[]; fee?: { paymentMethod: SponsoredFeePaymentMethod } }) => Promise<{
       receipt: { hasExecutionSucceeded: () => boolean; error?: string; txHash: { toString: () => string } };
     }>;
   };
@@ -364,7 +387,7 @@ async function registerTokenWithWallet(connection: ConnectedAztecWallet, artifac
 
 interface FaucetMethods {
   faucet: (amount: bigint) => {
-    send: (options: { from: AztecAddress }) => Promise<{
+    send: (options: { from: AztecAddress; fee?: { paymentMethod: SponsoredFeePaymentMethod } }) => Promise<{
       receipt: { hasExecutionSucceeded: () => boolean; error?: string; txHash: { toString: () => string } };
     }>;
   };
@@ -388,7 +411,7 @@ export async function faucetTestTokens(connection: ConnectedAztecWallet, currenc
   await registerTokenWithWallet(connection, tokenArtifact, tokenAddress);
   const token = Contract.at(tokenAddress, tokenArtifact, connection.wallet);
   await registerHandshakeRegistryWithWallet(connection);
-  const { receipt } = await (token.methods as unknown as FaucetMethods).faucet(amount).send({ from: bidderAddress });
+  const { receipt } = await (token.methods as unknown as FaucetMethods).faucet(amount).send({ from: bidderAddress, fee: { paymentMethod: await getSponsorFeePayment(connection) } });
   if (!receipt.hasExecutionSucceeded()) throw new Error(receipt.error ?? "The faucet transaction did not execute successfully.");
   return receipt.txHash.toString();
 }
@@ -424,7 +447,7 @@ export async function commitBidOnChain(
 
   const { receipt } = await (auction.methods as unknown as CommitBidMethods)
     .commit_bid(listingId, input.amount, salt, tokenAuthwitNonce)
-    .send({ from: bidderAddress, authWitnesses: [tokenAuthwit] });
+    .send({ from: bidderAddress, authWitnesses: [tokenAuthwit], fee: { paymentMethod: await getSponsorFeePayment(connection) } });
   if (!receipt.hasExecutionSucceeded()) {
     throw new Error(receipt.error ?? "The bid commitment transaction did not execute successfully.");
   }
@@ -450,7 +473,7 @@ export async function confirmClosingOnChain(connection: ConnectedAztecWallet, li
   const auction = Contract.at(auctionAddress, artifact, connection.wallet);
   const { receipt } = await (auction.methods as unknown as SealedAuctionMethods)
     .confirm_closing(Fr.fromString(listingIdHex))
-    .send({ from: connectedAddress });
+    .send({ from: connectedAddress, fee: { paymentMethod: await getSponsorFeePayment(connection) } });
   if (!receipt.hasExecutionSucceeded()) {
     throw new Error(receipt.error ?? "confirm_closing did not execute successfully.");
   }
@@ -538,7 +561,7 @@ async function sendPublicListingCall(
   await registerAuctionWithWallet(connection, artifact, auctionAddress);
   const auction = Contract.at(auctionAddress, artifact, connection.wallet);
   const methods = auction.methods as unknown as SealedAuctionMethods;
-  const { receipt } = await methods[functionName](Fr.fromString(listingIdHex)).send({ from: connectedAddress });
+  const { receipt } = await methods[functionName](Fr.fromString(listingIdHex)).send({ from: connectedAddress, fee: { paymentMethod: await getSponsorFeePayment(connection) } });
   if (!receipt.hasExecutionSucceeded()) {
     throw new Error(receipt.error ?? functionName + " did not execute successfully.");
   }
