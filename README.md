@@ -47,7 +47,7 @@ Listing creation is gated by an allowlisted operator model. Only the current ass
 
 Compile the workspace before starting or building the frontend. The frontend copies the generated artifacts into its ignored public artifact directory before `npm run dev` or `npm run build`.
 
-The frontend defaults to the Aztec testnet endpoint `https://aztec-testnet.drpc.org`, Sepolia chain ID `11155111` and explorer `https://testnet.aztecscan.xyz`. The Sponsored FPC address is `0x2adfb70e860909f0db8268b3fec80bce52a94559963444f5c0341816b8412130`, but this frontend does not submit Sponsored FPC fee calls. The browser wallet must already hold Fee Juice.
+The frontend defaults to the Aztec testnet endpoint `https://aztec-testnet.drpc.org`, Sepolia chain ID `11155111` and explorer `https://testnet.aztecscan.xyz`. The Sponsored FPC address is `0x2d8fff82a3b0c15d0a89169e7d8d043e079ab94d52031f1de1e4972ebad169d3`, but this frontend does not submit Sponsored FPC fee calls. The browser wallet must already hold Fee Juice.
 
 The wizard at `/deploy` deploys the test token and `SealedAuction`, then prints the addresses as an env snippet. It passes the connected account as the asset verifier. It compares the artifact's Aztec version with the live node and blocks deployment if they differ.
 

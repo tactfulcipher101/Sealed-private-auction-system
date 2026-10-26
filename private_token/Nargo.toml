@@ -4,5 +4,5 @@ type = "contract"
 authors = ["PrivateAuction"]
 
 [dependencies]
-aztec = { git = "https://github.com/aztec-labs-eng/aztec-nr", tag = "v6.0.0-rc.3", directory = "aztec" }
-balance_set = { git = "https://github.com/aztec-labs-eng/aztec-nr", tag = "v6.0.0-rc.3", directory = "balance-set" }
+aztec = { git = "https://github.com/aztec-labs-eng/aztec-nr", tag = "v6.0.0", directory = "aztec" }
+balance_set = { git = "https://github.com/aztec-labs-eng/aztec-nr", tag = "v6.0.0", directory = "balance-set" }
