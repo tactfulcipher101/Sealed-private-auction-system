@@ -143,7 +143,7 @@ The accompanying web experience illustrates the protocol lifecycle through four 
 - `/demo` walks through wallet connection, listing, bidding, live auction, and reveal-at-close settlement.
 - `/protocol` provides the longer technical explanation of the privacy model and auction phases.
 
-The demo can connect to a real Aztec browser wallet if the selected network node URL is configured. Wallet discovery is matched to that node's chain identity and requires explicit verification of the secure connection phrase. A configured asset-verifier wallet can create listings on-chain after confirming its operator attestation. Existing catalog entries, bidding, settlement, token escrow, and partner verification remain simulated or unimplemented. Refreshing the page resets local demo state.
+The demo can connect to a real Aztec browser wallet if the selected network node URL is configured. Wallet discovery is matched to that node's chain identity and requires explicit verification of the secure connection phrase. Listing creation is permissionless in the demo and does not verify the asset or seller. Existing catalog entries, settlement, token escrow, and partner verification remain simulated or unimplemented; reveal and claims are not wired into the frontend. Refreshing the page resets local demo state.
 
 The `/deploy` page deploys the test-only `PrivateToken` and auction artifacts using the connected wallet, then displays an env snippet with generated deployment addresses. Compile the root Noir workspace first. Deployment is blocked if the node runtime version differs from the artifact version. The connected account must already have Fee Juice; this frontend does not attach the Sponsored FPC payment method.
 
