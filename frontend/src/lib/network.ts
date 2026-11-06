@@ -8,7 +8,6 @@ export interface DeploymentConfig {
   explorerUrl: string | null;
   sponsoredFpcAddress: string | null;
   contractAddress: string | null;
-  assetVerifierAddress: string | null;
   treasuryAddress: string | null;
   pauseGuardians: string[];
   pauseThreshold: number;
@@ -28,7 +27,6 @@ function createConfig(
     explorerUrl?: string;
     sponsoredFpcAddress?: string;
     contractAddress?: string;
-    assetVerifierAddress?: string;
     treasuryAddress?: string;
     pauseGuardians?: string;
     pauseThreshold?: string;
@@ -53,7 +51,6 @@ function createConfig(
     explorerUrl: envValue(values.explorerUrl) ?? (mode === "testnet" ? "https://testnet.aztecscan.xyz" : null),
     sponsoredFpcAddress: envValue(values.sponsoredFpcAddress) ?? (mode === "testnet" ? "0x2d8fff82a3b0c15d0a89169e7d8d043e079ab94d52031f1de1e4972ebad169d3" : null),
     contractAddress: envValue(values.contractAddress),
-    assetVerifierAddress: envValue(values.assetVerifierAddress),
     treasuryAddress: envValue(values.treasuryAddress),
     pauseGuardians,
     pauseThreshold: Number.isInteger(pauseThreshold) && pauseThreshold > 0 ? pauseThreshold : 2,
@@ -61,7 +58,6 @@ function createConfig(
     isConfigured: Boolean(
       (envValue(values.nodeUrl) || mode === "testnet") &&
       envValue(values.contractAddress) &&
-      envValue(values.assetVerifierAddress) &&
       envValue(values.treasuryAddress) &&
       pauseGuardians.length === 3 &&
       Number.isInteger(pauseThreshold) &&
@@ -78,7 +74,6 @@ export const deploymentConfigs: Record<NetworkMode, DeploymentConfig> = {
     explorerUrl: process.env.NEXT_PUBLIC_AZTEC_TESTNET_EXPLORER_URL,
     sponsoredFpcAddress: process.env.NEXT_PUBLIC_AZTEC_TESTNET_SPONSORED_FPC_ADDRESS,
     contractAddress: process.env.NEXT_PUBLIC_AZTEC_TESTNET_CONTRACT_ADDRESS,
-    assetVerifierAddress: process.env.NEXT_PUBLIC_AZTEC_TESTNET_ASSET_VERIFIER_ADDRESS,
     treasuryAddress: process.env.NEXT_PUBLIC_AZTEC_TESTNET_TREASURY_ADDRESS,
     pauseGuardians: process.env.NEXT_PUBLIC_AZTEC_TESTNET_PAUSE_GUARDIANS,
     pauseThreshold: process.env.NEXT_PUBLIC_AZTEC_TESTNET_PAUSE_THRESHOLD,
@@ -95,7 +90,6 @@ export const deploymentConfigs: Record<NetworkMode, DeploymentConfig> = {
     explorerUrl: process.env.NEXT_PUBLIC_AZTEC_MAINNET_EXPLORER_URL,
     sponsoredFpcAddress: process.env.NEXT_PUBLIC_AZTEC_MAINNET_SPONSORED_FPC_ADDRESS,
     contractAddress: process.env.NEXT_PUBLIC_AZTEC_MAINNET_CONTRACT_ADDRESS,
-    assetVerifierAddress: process.env.NEXT_PUBLIC_AZTEC_MAINNET_ASSET_VERIFIER_ADDRESS,
     treasuryAddress: process.env.NEXT_PUBLIC_AZTEC_MAINNET_TREASURY_ADDRESS,
     pauseGuardians: process.env.NEXT_PUBLIC_AZTEC_MAINNET_PAUSE_GUARDIANS,
     pauseThreshold: process.env.NEXT_PUBLIC_AZTEC_MAINNET_PAUSE_THRESHOLD,

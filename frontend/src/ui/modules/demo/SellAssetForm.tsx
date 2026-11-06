@@ -1,10 +1,10 @@
 ﻿"use client";
 
 import { useState, type ChangeEvent, type FormEvent } from "react";
-import { AlertCircle, ArrowLeft, ShieldCheck, Loader2, ImagePlus, X } from "lucide-react";
+import { AlertCircle, ArrowLeft, ArrowUpRight, Loader2, ImagePlus, X } from "lucide-react";
 import type { Listing, ListingCategory } from "@/lib/demoData";
 import type { ConnectedAztecWallet } from "@/lib/aztecWallet";
-import { createVerifiedListing, validateListingCategoryRules } from "@/lib/auctionClient";
+import { createListingOnChain, validateListingCategoryRules } from "@/lib/auctionClient";
 import { getNetworkConfig, type SupportedCurrency } from "@/lib/network";
 
 interface SellAssetFormProps {
@@ -29,14 +29,9 @@ export function SellAssetForm({ connection, onListingCreated, onCancel }: SellAs
   const [legalClosingDays, setLegalClosingDays] = useState("7");
   const [closeAfterMinutes, setCloseAfterMinutes] = useState("60");
   const [revealWindowMinutes, setRevealWindowMinutes] = useState("60");
-  const [operatorAttestation, setOperatorAttestation] = useState(false);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const isConfiguredVerifier = Boolean(
-    config.assetVerifierAddress &&
-    connection.address.toLowerCase() === config.assetVerifierAddress.toLowerCase()
-  );
   const hasSelectedToken = Boolean(config.tokenAddresses[currency]);
 
   function handleImageSelect(event: ChangeEvent<HTMLInputElement>) {
@@ -69,10 +64,6 @@ export function SellAssetForm({ connection, onListingCreated, onCancel }: SellAs
       setError("Complete the listing details, seller address, and positive reserve price.");
       return;
     }
-    if (!operatorAttestation) {
-      setError("Confirm the asset has been verified before submitting the operator attestation.");
-      return;
-    }
     if (!Number.isSafeInteger(parsedCloseMinutes) || !Number.isSafeInteger(parsedRevealMinutes) || parsedCloseMinutes < 5 || parsedRevealMinutes < 1) {
       setError("Closing window must be at least 5 whole minutes and the reveal window at least 1 whole minute.");
       return;
@@ -90,7 +81,7 @@ export function SellAssetForm({ connection, onListingCreated, onCancel }: SellAs
     const revealDeadline = closeTimestamp + parsedRevealMinutes * 60;
     setIsSubmitting(true);
     try {
-      const listing = await createVerifiedListing(connection, {
+      const listing = await createListingOnChain(connection, {
         title: title.trim(),
         category,
         region: region.trim(),
@@ -122,9 +113,9 @@ export function SellAssetForm({ connection, onListingCreated, onCancel }: SellAs
       </button>
 
       <div className="space-y-2">
-        <h2 className="text-xl font-bold text-slate-100">Create verified listing</h2>
+        <h2 className="text-xl font-bold text-slate-100">Publish an on-chain listing</h2>
         <p className="text-sm text-slate-400">
-          This submits a real transaction. The connected verifier account is attesting that the off-chain asset review is complete; no verification partner is contacted by this app.
+          Anyone can publish a listing in this demo. This does not verify ownership, condition, or the seller’s right to sell the asset.
         </p>
         <p className="text-xs leading-5 text-slate-500">
           TEST-ONLY token fixture: this app only supports the local test token. It is not a stablecoin, and it is not for production use.
@@ -134,12 +125,10 @@ export function SellAssetForm({ connection, onListingCreated, onCancel }: SellAs
         </p>
       </div>
 
-      <div className={"rounded-lg border p-4 text-xs leading-5 " + (isConfiguredVerifier && hasSelectedToken ? "border-emerald-500/25 bg-emerald-500/5 text-emerald-100/80" : "border-amber-500/25 bg-amber-500/5 text-amber-100/80")}>
-        {isConfiguredVerifier
-          ? hasSelectedToken
-            ? `Submitting as the configured asset verifier on ${config.label}.`
-            : `Configure a deployed settlement-token address for ${config.label} before listing.`
-          : "This wallet is not the configured asset verifier. Connect with the verifier account to submit an on-chain listing."}
+      <div className="rounded-lg border border-amber-500/25 bg-amber-500/5 p-4 text-xs leading-5 text-amber-100/80">
+        {hasSelectedToken
+          ? `Permissionless demo listing on ${config.label}; treat asset details as unverified.`
+          : `Configure a deployed settlement-token address for ${config.label} before listing.`}
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -317,16 +306,6 @@ export function SellAssetForm({ connection, onListingCreated, onCancel }: SellAs
           </div>
         )}
 
-        <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-amber-500/25 bg-amber-500/5 p-4 text-xs leading-5 text-amber-100/90">
-          <input
-            type="checkbox"
-            checked={operatorAttestation}
-            onChange={(event) => setOperatorAttestation(event.target.checked)}
-            className="mt-1 accent-amber-400"
-          />
-          <span>I am the configured asset verifier and confirm that the seller’s ownership and asset review have been completed off-chain. This transaction records my operator attestation; it does not independently prove the review.</span>
-        </label>
-
         {error && (
           <p role="alert" className="flex items-start gap-2 rounded-lg border border-rose-500/30 bg-rose-500/5 p-3 text-xs leading-5 text-rose-200">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /> {error}
@@ -335,11 +314,11 @@ export function SellAssetForm({ connection, onListingCreated, onCancel }: SellAs
 
         <button
           type="submit"
-          disabled={isSubmitting || !isConfiguredVerifier || !hasSelectedToken || availableCurrencies.length === 0}
+          disabled={isSubmitting || !hasSelectedToken || availableCurrencies.length === 0}
           className="w-full py-3 bg-slate-100 text-slate-950 text-sm font-medium rounded-lg hover:bg-white disabled:cursor-not-allowed disabled:opacity-50 transition-all flex items-center justify-center gap-2"
         >
-          {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
-          {isSubmitting ? "Waiting for Aztec transaction..." : "Attest and create listing on-chain"}
+          {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUpRight className="h-4 w-4" />}
+          {isSubmitting ? "Waiting for Aztec transaction..." : "Publish listing on-chain"}
         </button>
       </form>
     </div>

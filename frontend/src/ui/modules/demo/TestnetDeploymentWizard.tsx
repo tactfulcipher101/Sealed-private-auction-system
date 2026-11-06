@@ -78,7 +78,6 @@ export function TestnetDeploymentWizard() {
         `NEXT_PUBLIC_AZTEC_TESTNET_NODE_URL=${config.nodeUrl ?? ""}`,
         `NEXT_PUBLIC_AZTEC_TESTNET_EXPLORER_URL=${config.explorerUrl ?? ""}`,
         `NEXT_PUBLIC_AZTEC_TESTNET_CONTRACT_ADDRESS=${auctionDeployment.address}`,
-        `NEXT_PUBLIC_AZTEC_TESTNET_ASSET_VERIFIER_ADDRESS=${connection.address}`,
         `NEXT_PUBLIC_AZTEC_TESTNET_TREASURY_ADDRESS=${treasury.trim()}`,
         `NEXT_PUBLIC_AZTEC_TESTNET_PAUSE_GUARDIANS=${guardians.map((address) => address.trim()).join(",")}`,
         `NEXT_PUBLIC_AZTEC_TESTNET_PAUSE_THRESHOLD=${pauseThreshold}`,
@@ -104,7 +103,7 @@ export function TestnetDeploymentWizard() {
           <p className="text-xs uppercase tracking-[0.2em] text-emerald-400">Testnet setup</p>
           <h1 className="mt-3 text-3xl font-semibold text-white">Deploy the auction contracts</h1>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">
-            This deploys the test-only private token and the auction using your wallet. Your account becomes the initial asset verifier. Never use the faucet token for production.
+            This deploys the test-only private token and auction. Anyone can create listings in this demo; listings are not independently verified. Never use the faucet token for production.
           </p>
         </div>
         <WalletConnect onConnected={setConnection} />
@@ -165,7 +164,7 @@ export function TestnetDeploymentWizard() {
       <section className="space-y-4 rounded-xl border border-slate-800 bg-slate-900/40 p-5">
         <div>
           <h2 className="text-sm font-semibold text-slate-100">2. Deploy auction</h2>
-          <p className="mt-1 text-xs leading-5 text-slate-400">Your connected account will be the initial asset verifier. The treasury and guardians become constructor parameters.</p>
+          <p className="mt-1 text-xs leading-5 text-slate-400">Listings are permissionless in this demo. The treasury and guardians become constructor parameters.</p>
         </div>
         <label className="block text-xs text-slate-400">Treasury Aztec address
           <input value={treasury} onChange={(event) => setTreasury(event.target.value)} placeholder="0x..." className="mt-2 w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2.5 font-mono text-xs text-white" />

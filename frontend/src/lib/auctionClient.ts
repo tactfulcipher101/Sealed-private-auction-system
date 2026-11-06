@@ -1,7 +1,6 @@
 export {
-  createVerifiedListing,
+  createListingOnChain,
   type CreateListingInput,
   configuredAddress,
-  getAssetVerifier,
   validateListingCategoryRules,
 } from "@/lib/sealedAuction";

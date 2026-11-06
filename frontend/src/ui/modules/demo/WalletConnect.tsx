@@ -156,7 +156,7 @@ export function WalletConnect({ onConnected }: WalletConnectProps) {
               key={provider.id}
               type="button"
               onClick={() => void startSecureConnection(provider)}
-              disabled={isConnecting}
+              disabled={isConnecting && selectedProvider !== null}
               className="flex w-full items-center justify-between rounded-lg border border-slate-800 bg-slate-950/60 px-4 py-3 text-left text-sm text-slate-200 transition hover:border-slate-600 disabled:opacity-50"
             >
               <span>{provider.name}</span>

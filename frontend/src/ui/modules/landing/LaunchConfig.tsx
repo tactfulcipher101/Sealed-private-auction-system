@@ -36,8 +36,8 @@ export function LaunchConfig() {
                 <p className="mt-2 break-all font-mono text-xs text-slate-200">{displayValue(config.treasuryAddress)}</p>
               </div>
               <div className="rounded-xl border border-slate-800 bg-slate-950/30 p-4 sm:col-span-2">
-                <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Listing verifier</p>
-                <p className="mt-2 break-all font-mono text-xs text-slate-200">{displayValue(config.assetVerifierAddress)}</p>
+                <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Listing access</p>
+                <p className="mt-2 font-mono text-xs text-amber-200">Permissionless in this demo; listings are not independently verified</p>
               </div>
               <div className="rounded-xl border border-slate-800 bg-slate-950/30 p-4">
                 <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Pause threshold</p>

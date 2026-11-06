@@ -15,31 +15,50 @@ interface ListingDetailProps {
   onBack: () => void;
 }
 
+type ChainStatus = { id: string; line: string; status: bigint | null };
+
 export function ListingDetail({ listing, isOwnListing, connection, onEnterBidding, onBack }: ListingDetailProps) {
-  const [chainStatus, setChainStatus] = useState<{ id: string; line: string; open: boolean } | null>(null);
+  const [chainStatus, setChainStatus] = useState<ChainStatus | null>(null);
 
   useEffect(() => {
     if (!listing.onChain || !connection) return;
     const activeConnection = connection;
     const targetListingId = listing.id;
     let cancelled = false;
+    let inFlight = false;
     const loadChainStatus = async () => {
+      if (inFlight) return;
+      inFlight = true;
       try {
         const state = await readListingOnChain(activeConnection, Fr.fromString(targetListingId));
         if (!cancelled) {
-          setChainStatus({ id: targetListingId, line: `Chain status: ${state.statusLabel}, close timestamp ${state.closeTimestamp}`, open: state.status === BigInt(1) });
+          setChainStatus({
+            id: targetListingId,
+            line: `Chain status: ${state.statusLabel}, close timestamp ${state.closeTimestamp}`,
+            status: state.status,
+          });
         }
       } catch (error) {
         if (!cancelled) {
-          setChainStatus({ id: targetListingId, line: `Chain status unavailable: ${error instanceof Error ? error.message : "read failed"}`, open: true });
+          setChainStatus({
+            id: targetListingId,
+            line: `Chain status unavailable: ${error instanceof Error ? error.message : "read failed"}`,
+            status: null,
+          });
         }
+      } finally {
+        inFlight = false;
       }
     };
     void loadChainStatus();
+    const refreshTimer = setInterval(() => void loadChainStatus(), 20000);
     return () => {
       cancelled = true;
+      clearInterval(refreshTimer);
     };
   }, [connection, listing.id, listing.onChain]);
+
+  const currentStatus = chainStatus?.id === listing.id ? chainStatus.status : null;
 
   return (
     <div className="space-y-6">
@@ -76,15 +95,15 @@ export function ListingDetail({ listing, isOwnListing, connection, onEnterBiddin
           </p>
         </div>
         <div className="p-4 rounded-lg bg-slate-900/40 border border-slate-800">
-          <p className="text-xs text-slate-500">Verified by</p>
+          <p className="text-xs text-slate-500">Verification status</p>
           <p className="text-sm text-slate-200 mt-1">{listing.verifiedBy}</p>
         </div>
       </div>
 
       {listing.onChain ? (
         <div className="space-y-2 rounded-lg border border-emerald-500/25 bg-emerald-500/5 p-4">
-          <p className="text-xs leading-relaxed text-emerald-100/80">
-            This listing was created on-chain. A connected wallet can commit a sealed bid below. Reveal, settlement and claims are not wired into this frontend yet.
+          <p className="text-xs leading-relaxed text-amber-100/90">
+            This permissionless listing is not independently verified. Bids can be committed while it is open and manually revealed from the bidder&apos;s wallet after close. Claims are CLI-only because they require the auction key in the claimant&apos;s PXE; never enter that secret here.
           </p>
           <p className="text-[11px] leading-5 text-slate-400">
             The descriptive metadata shown here is local to this browser session; it is not stored in the auction contract.
@@ -92,7 +111,13 @@ export function ListingDetail({ listing, isOwnListing, connection, onEnterBiddin
           {chainStatus?.id === listing.id && (
             <p className="font-mono text-[11px] text-emerald-200/80">{chainStatus.line}</p>
           )}
-          {connection && !isOwnListing && chainStatus?.id === listing.id && chainStatus.open && <OnChainBidPanel listing={listing} connection={connection} />}
+          {connection && !isOwnListing && (currentStatus === BigInt(1) || currentStatus === BigInt(2)) && (
+            <OnChainBidPanel
+              listing={listing}
+              connection={connection}
+              revealWindow={currentStatus === BigInt(2)}
+            />
+          )}
           {listing.transactionHash && (
             <p className="break-all font-mono text-[10px] text-emerald-200/70">Transaction {listing.transactionHash}</p>
           )}
@@ -102,7 +127,7 @@ export function ListingDetail({ listing, isOwnListing, connection, onEnterBiddin
           <Ban className="h-4 w-4 text-rose-400 shrink-0 mt-0.5" />
           <p className="text-xs text-slate-400 leading-relaxed">
             This listing belongs to your connected wallet, so bidding is disabled in this demo.
-            The contract rejects bids from the listing's seller address; a second account is not blocked.
+            The contract rejects bids from the listing&apos;s seller address; a second account is not blocked.
           </p>
         </div>
       ) : (
@@ -115,15 +140,15 @@ export function ListingDetail({ listing, isOwnListing, connection, onEnterBiddin
         </div>
       )}
 
-      <button
-        onClick={onEnterBidding}
-        disabled={listing.onChain}
-        className="w-full py-3 bg-slate-100 text-slate-950 text-sm font-medium rounded-lg hover:bg-white disabled:cursor-not-allowed disabled:opacity-50 transition-all flex items-center justify-center gap-2"
-      >
-        <ShieldCheck className="h-4 w-4" />
-        <span>{listing.onChain ? "Bidding not connected" : isOwnListing ? "Monitor auction" : "Enter private bidding"}</span>
-      </button>
+      {!listing.onChain && (
+        <button
+          onClick={onEnterBidding}
+          className="w-full py-3 bg-slate-100 text-slate-950 text-sm font-medium rounded-lg hover:bg-white transition-all flex items-center justify-center gap-2"
+        >
+          <ShieldCheck className="h-4 w-4" />
+          <span>{isOwnListing ? "Monitor auction" : "Enter private bidding"}</span>
+        </button>
+      )}
     </div>
   );
 }
-

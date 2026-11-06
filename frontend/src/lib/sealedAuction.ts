@@ -1,7 +1,8 @@
 import { Contract } from "@aztec-labs/aztec.js/contracts";
 import type { AppCapabilities } from "@aztec-labs/aztec.js/wallet";
 import { AztecAddress } from "@aztec-labs/aztec.js/addresses";
-import { createAztecNodeClient } from "@aztec-labs/aztec.js/node";
+import { createAztecNodeClient, waitForTx } from "@aztec-labs/aztec.js/node";
+import { TxStatus } from "@aztec-labs/stdlib/tx";
 import { getStandardHandshakeRegistry } from "@aztec-labs/standard-contracts/handshake-registry/lazy";
 import { STANDARD_HANDSHAKE_REGISTRY_ADDRESS } from "@aztec-labs/standard-contracts/handshake-registry/constants";
 import { Fr } from "@aztec-labs/foundation/curves/bn254";
@@ -89,9 +90,6 @@ interface SealedAuctionMethods {
   get_listing: (listing_id: Fr) => {
     simulate: (options: { from: AztecAddress }) => Promise<{ result: unknown }>;
   };
-  get_asset_verifier: () => {
-    simulate: (options: { from: AztecAddress }) => Promise<{ result: unknown }>;
-  };
   confirm_closing: (listing_id: Fr) => {
     send: (options: { from: AztecAddress; fee?: { paymentMethod: SponsoredFeePaymentMethod } }) => Promise<{
       receipt: { hasExecutionSucceeded: () => boolean; error?: string; txHash: { toString: () => string } };
@@ -103,6 +101,11 @@ interface SealedAuctionMethods {
     }>;
   };
   finalize_settlement: (listing_id: Fr) => {
+    send: (options: { from: AztecAddress; fee?: { paymentMethod: SponsoredFeePaymentMethod } }) => Promise<{
+      receipt: { hasExecutionSucceeded: () => boolean; error?: string; txHash: { toString: () => string } };
+    }>;
+  };
+  reveal_bid: (listing_id: Fr) => {
     send: (options: { from: AztecAddress; fee?: { paymentMethod: SponsoredFeePaymentMethod } }) => Promise<{
       receipt: { hasExecutionSucceeded: () => boolean; error?: string; txHash: { toString: () => string } };
     }>;
@@ -148,20 +151,6 @@ async function registerAuctionWithWallet(connection: ConnectedAztecWallet, artif
   walletsWithAuctionRegistered.add(connection.wallet);
 }
 
-export async function getAssetVerifier(connection: ConnectedAztecWallet): Promise<AztecAddress> {
-  await assertSealedAuctionFunction("get_asset_verifier");
-  const config = getNetworkConfig();
-  const auctionAddress = configuredAddress(config.contractAddress, "Auction contract");
-  const connectedAddress = configuredAddress(connection.address, "Connected account");
-  const artifact = await getSealedAuctionArtifact();
-  const auction = Contract.at(auctionAddress, artifact, connection.wallet);
-  await registerAuctionWithWallet(connection, artifact, auctionAddress);
-  const result = await (auction.methods as unknown as SealedAuctionMethods).get_asset_verifier().simulate({ from: connectedAddress });
-  const verifierResult = result.result;
-  if (typeof verifierResult === "string") return AztecAddress.schema.parse(verifierResult);
-  return verifierResult as AztecAddress;
-}
-
 export function buildCapabilityManifest(): AppCapabilities {
   const config = getNetworkConfig();
   const auctionAddress = configuredAddress(config.contractAddress, "Auction contract");
@@ -173,10 +162,10 @@ export function buildCapabilityManifest(): AppCapabilities {
     metadata: { name: "Sealed private auction", version: "0.1.0" },
     capabilities: [
       { type: "accounts", canGet: true, canCreateAuthWit: true },
-      { type: "contracts", contracts: [auctionAddress, ...tokenAddresses, STANDARD_HANDSHAKE_REGISTRY_ADDRESS], canRegister: true, canGetMetadata: true },
+      { type: "contracts", contracts: [auctionAddress, ...tokenAddresses, STANDARD_HANDSHAKE_REGISTRY_ADDRESS, ...(config.sponsoredFpcAddress ? [configuredAddress(config.sponsoredFpcAddress, "Sponsored FPC")] : [])], canRegister: true, canGetMetadata: true },
       {
         type: "simulation",
-        transactions: { scope: [{ contract: auctionAddress, function: "*" }, ...tokenAddresses.map((tokenAddress) => ({ contract: tokenAddress, function: "*" }))] },
+        transactions: { scope: [{ contract: auctionAddress, function: "*" }, ...tokenAddresses.map((tokenAddress) => ({ contract: tokenAddress, function: "*" })), ...(config.sponsoredFpcAddress ? [{ contract: configuredAddress(config.sponsoredFpcAddress, "Sponsored FPC"), function: "sponsor_unconditionally" }] : [])] },
         utilities: { scope: [{ contract: auctionAddress, function: "*" }, ...tokenAddresses.map((tokenAddress) => ({ contract: tokenAddress, function: "*" }))] },
       },
       {
@@ -194,6 +183,7 @@ export function buildCapabilityManifest(): AppCapabilities {
               "confirm_closing",
           ].map((functionName) => ({ contract: auctionAddress, function: functionName })),
           ...tokenAddresses.map((tokenAddress) => ({ contract: tokenAddress, function: "faucet" })),
+          ...(config.sponsoredFpcAddress ? [{ contract: configuredAddress(config.sponsoredFpcAddress, "Sponsored FPC"), function: "sponsor_unconditionally" }] : []),
         ],
       },
     ],
@@ -256,7 +246,7 @@ export interface CreateListingInput {
   sellerAddress: string;
 }
 
-export async function createVerifiedListing(
+export async function createListingOnChain(
   connection: ConnectedAztecWallet,
   input: CreateListingInput,
 ): Promise<Listing> {
@@ -269,19 +259,11 @@ export async function createVerifiedListing(
     throw new Error("Connected wallet is on a different Aztec network than the configured node.");
   }
 
-  const verifierAddress = configuredAddress(config.assetVerifierAddress, "Asset verifier");
   const connectedAddress = configuredAddress(connection.address, "Connected account");
-  if (!connectedAddress.equals(verifierAddress)) {
-    throw new Error("Only the configured asset-verifier account can create listings.");
-  }
 
   const auctionAddress = configuredAddress(config.contractAddress, "Auction contract");
   const sellerAddress = configuredAddress(input.sellerAddress, "Seller account");
   const tokenAddress = configuredAddress(config.tokenAddresses[input.currency] ?? null, `${input.currency} token`);
-  const onchainVerifier = await getAssetVerifier(connection);
-  if (!onchainVerifier.equals(verifierAddress)) {
-    throw new Error("Configured asset verifier does not match the deployed contract verifier.");
-  }
 
   const categoryValidation = validateListingCategoryRules(input.category, input.stakeBps, input.legalClosingWindowSeconds);
   if (categoryValidation) {
@@ -303,7 +285,7 @@ export async function createVerifiedListing(
     BigInt(input.stakeBps),
     BigInt(input.legalClosingWindowSeconds),
   ).send({ from: connectedAddress, fee: { paymentMethod: await getSponsorFeePayment(connection) } });
-  if (!receipt.hasExecutionSucceeded()) {
+  if (!(await confirmReceipt(receipt)).hasExecutionSucceeded()) {
     throw new Error(receipt.error ?? "The listing transaction did not execute successfully.");
   }
 
@@ -317,7 +299,7 @@ export async function createVerifiedListing(
     stakeBps: input.stakeBps,
     legalClosingWindowSeconds: input.legalClosingWindowSeconds,
     currency: input.currency,
-    verifiedBy: "Configured on-chain asset verifier",
+    verifiedBy: "Not independently verified (permissionless demo listing)",
     sellerWalletAddress: sellerAddress.toString(),
     onChain: true,
     imageUrls: input.imageUrls,
@@ -367,7 +349,7 @@ export interface CommittedBid {
 }
 
 /**
- * Commits a sealed bid on chain. The caller must keep amount and salt: reveal_bid_for needs both and a lost salt cannot be recovered.
+ * Commits a sealed bid on chain. The bidder can reveal from their private note; amount and salt are needed only for the relayer path.
  * The token authwit lets the auction pull amount plus stake from the bidder through transfer_in_private.
  */
 const walletsWithTokensRegistered = new WeakMap<object, Set<string>>();
@@ -402,6 +384,17 @@ async function registerHandshakeRegistryWithWallet(connection: ConnectedAztecWal
   walletsWithHandshakeRegistered.add(connection.wallet);
 }
 
+type ReceiptLike = { hasExecutionSucceeded: () => boolean; error?: string; txHash: { toString: () => string } };
+
+async function confirmReceipt(receipt: ReceiptLike): Promise<ReceiptLike> {
+  if (receipt.hasExecutionSucceeded()) return receipt;
+  const config = getNetworkConfig();
+  if (!config.nodeUrl) throw new Error("Node URL is not configured.");
+  const node = createAztecNodeClient(config.nodeUrl, { maxBatchSize: 3 });
+  const mined = await waitForTx(node, receipt.txHash as unknown as Parameters<typeof waitForTx>[1], { waitForStatus: TxStatus.PROPOSED, timeout: 180 });
+  return mined as unknown as ReceiptLike;
+}
+
 export async function faucetTestTokens(connection: ConnectedAztecWallet, currency: SupportedCurrency, amount: bigint): Promise<string> {
   if (amount <= BigInt(0)) throw new Error("Faucet amount must be positive.");
   const config = getNetworkConfig();
@@ -412,7 +405,7 @@ export async function faucetTestTokens(connection: ConnectedAztecWallet, currenc
   const token = Contract.at(tokenAddress, tokenArtifact, connection.wallet);
   await registerHandshakeRegistryWithWallet(connection);
   const { receipt } = await (token.methods as unknown as FaucetMethods).faucet(amount).send({ from: bidderAddress, fee: { paymentMethod: await getSponsorFeePayment(connection) } });
-  if (!receipt.hasExecutionSucceeded()) throw new Error(receipt.error ?? "The faucet transaction did not execute successfully.");
+  if (!(await confirmReceipt(receipt)).hasExecutionSucceeded()) throw new Error(receipt.error ?? "The faucet transaction did not execute successfully.");
   return receipt.txHash.toString();
 }
 
@@ -448,7 +441,7 @@ export async function commitBidOnChain(
   const { receipt } = await (auction.methods as unknown as CommitBidMethods)
     .commit_bid(listingId, input.amount, salt, tokenAuthwitNonce)
     .send({ from: bidderAddress, authWitnesses: [tokenAuthwit], fee: { paymentMethod: await getSponsorFeePayment(connection) } });
-  if (!receipt.hasExecutionSucceeded()) {
+  if (!(await confirmReceipt(receipt)).hasExecutionSucceeded()) {
     throw new Error(receipt.error ?? "The bid commitment transaction did not execute successfully.");
   }
   return {
@@ -474,7 +467,7 @@ export async function confirmClosingOnChain(connection: ConnectedAztecWallet, li
   const { receipt } = await (auction.methods as unknown as SealedAuctionMethods)
     .confirm_closing(Fr.fromString(listingIdHex))
     .send({ from: connectedAddress, fee: { paymentMethod: await getSponsorFeePayment(connection) } });
-  if (!receipt.hasExecutionSucceeded()) {
+  if (!(await confirmReceipt(receipt)).hasExecutionSucceeded()) {
     throw new Error(receipt.error ?? "confirm_closing did not execute successfully.");
   }
   return receipt.txHash.toString();
@@ -516,7 +509,7 @@ export async function loadOnChainListings(connection: ConnectedAztecWallet): Pro
       if (
         !info ||
         !sellerText ||
-        info.verified !== true ||
+        typeof info.verified !== "boolean" ||
         typeof info.reserve_price !== "bigint" ||
         typeof info.category !== "bigint" ||
         typeof info.stake_bps !== "bigint" ||
@@ -534,7 +527,9 @@ export async function loadOnChainListings(connection: ConnectedAztecWallet): Pro
         stakeBps: Number(info.stake_bps),
         legalClosingWindowSeconds: Number(info.legal_closing_window),
         currency: "TEST",
-        verifiedBy: "Configured on-chain asset verifier",
+        verifiedBy: info.verified
+          ? "Legacy verifier attestation; not independently verified"
+          : "Not independently verified (permissionless demo listing)",
         sellerWalletAddress: sellerText,
         onChain: true,
       });
@@ -543,6 +538,29 @@ export async function loadOnChainListings(connection: ConnectedAztecWallet): Pro
     }
   }
   return { listings, skipped };
+}
+
+export async function revealBidOnChain(connection: ConnectedAztecWallet, rawListingId: string): Promise<string> {
+  const listingIdHex = /^0x[0-9a-fA-F]{1,64}$/.test(rawListingId) ? "0x" + rawListingId.slice(2).padStart(64, "0") : rawListingId;
+  if (!/^0x[0-9a-fA-F]{64}$/.test(listingIdHex)) {
+    throw new Error("Listing id must be 0x followed by 64 hex characters.");
+  }
+  await assertSealedAuctionFunction("reveal_bid");
+  const config = getNetworkConfig();
+  const auctionAddress = configuredAddress(config.contractAddress, "Auction contract");
+  const bidderAddress = configuredAddress(connection.address, "Connected account");
+  const artifact = await getSealedAuctionArtifact();
+  await registerAuctionWithWallet(connection, artifact, auctionAddress);
+  const auction = Contract.at(auctionAddress, artifact, connection.wallet);
+  const methods = auction.methods as unknown as SealedAuctionMethods;
+  const { receipt } = await methods.reveal_bid(Fr.fromString(listingIdHex)).send({
+    from: bidderAddress,
+    fee: { paymentMethod: await getSponsorFeePayment(connection) },
+  });
+  if (!(await confirmReceipt(receipt)).hasExecutionSucceeded()) {
+    throw new Error(receipt.error ?? "The bid reveal transaction did not execute successfully.");
+  }
+  return receipt.txHash.toString();
 }
 
 async function sendPublicListingCall(
@@ -562,7 +580,7 @@ async function sendPublicListingCall(
   const auction = Contract.at(auctionAddress, artifact, connection.wallet);
   const methods = auction.methods as unknown as SealedAuctionMethods;
   const { receipt } = await methods[functionName](Fr.fromString(listingIdHex)).send({ from: connectedAddress, fee: { paymentMethod: await getSponsorFeePayment(connection) } });
-  if (!receipt.hasExecutionSucceeded()) {
+  if (!(await confirmReceipt(receipt)).hasExecutionSucceeded()) {
     throw new Error(receipt.error ?? functionName + " did not execute successfully.");
   }
   return receipt.txHash.toString();

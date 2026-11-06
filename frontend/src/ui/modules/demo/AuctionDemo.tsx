@@ -69,6 +69,10 @@ export function AuctionDemo() {
       if (!connection) return;
       const activeConnection = connection;
       let cancelled = false;
+      let inFlight = false;
+      const refreshListings = () => {
+      if (inFlight) return;
+      inFlight = true;
       void loadOnChainListings(activeConnection)
         .then((result) => {
           if (cancelled) return;
@@ -80,9 +84,16 @@ export function AuctionDemo() {
         })
         .catch((error: unknown) => {
           if (!cancelled) setLoaderNote("Could not load on-chain listings: " + (error instanceof Error ? error.message : "read failed"));
+        })
+        .finally(() => {
+          inFlight = false;
         });
+      };
+      refreshListings();
+      const refreshTimer = setInterval(refreshListings, 20000);
       return () => {
         cancelled = true;
+        clearInterval(refreshTimer);
       };
     }, [connection]);
 
@@ -109,7 +120,7 @@ export function AuctionDemo() {
       </div>
 
       <p className="mb-8 rounded-lg border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-xs leading-5 text-amber-100/80">
-        Wallet connected. Verifier-authorized listing creation submits to the configured contract; existing catalog entries and bidding/settlement flows are previews.
+        Wallet connected. Listings on a newly deployed contract are permissionless and unverified. Bid reveal is manual from the bidder wallet; claims are CLI-only and require the auction key in the claimant&apos;s PXE.
       </p>
 
       {loaderNote && (
@@ -196,4 +207,3 @@ export function AuctionDemo() {
     </div>
   );
 }
-
