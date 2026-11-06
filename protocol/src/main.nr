@@ -182,12 +182,8 @@ pub contract SealedAuction {
         stake_bps: u16,
         legal_closing_window: u64,
     ) {
-        let caller = self.context.maybe_msg_sender().expect(
+        let _caller = self.context.maybe_msg_sender().expect(
             f"create_listing must be called through an account contract",
-        );
-        assert(
-            caller == self.storage.asset_verifier.read(),
-            "only the configured asset verifier may create listings",
         );
         assert(!seller.is_zero(), "seller cannot be zero");
         assert(listing_id != 0, "listing id cannot be zero");
@@ -219,7 +215,7 @@ pub contract SealedAuction {
                 reserve_price,
                 close_timestamp,
                 reveal_deadline,
-                verified: true,
+                verified: false,
                 category,
                 stake_bps,
                 legal_closing_window,
@@ -316,7 +312,6 @@ pub contract SealedAuction {
         let listing = self.storage.listings.at(listing_id).read();
         assert(bidder != listing.seller, "seller cannot bid on own listing");
         let now = self.context.get_anchor_block_header().timestamp();
-        assert(listing.verified, "listing is not verified");
         assert(amount >= listing.reserve_price, "bid is below reserve price");
         assert(now < listing.close_timestamp, "auction is closed");
 
@@ -947,4 +942,3 @@ pub contract SealedAuction {
         );
     }
 }
-

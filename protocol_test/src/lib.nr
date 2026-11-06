@@ -14,8 +14,8 @@ global BIDDER_A_FUNDS: u128 = 500;
 global BIDDER_B_FUNDS: u128 = 700;
 global TOKEN_AUTHWIT_NONCE: Field = 1;
 
-#[test(should_fail_with = "only the configured asset verifier may create listings")]
-unconstrained fn untrusted_account_cannot_create_a_verified_listing() {
+#[test]
+unconstrained fn any_account_can_create_a_listing() {
     let mut env = TestEnvironment::new();
     let deployer = env.create_light_account();
     let treasury = env.create_light_account();
@@ -31,39 +31,20 @@ unconstrained fn untrusted_account_cannot_create_a_verified_listing() {
     );
 
     let close_timestamp = env.last_block_timestamp() + 100;
-    let untrusted_attempts: bool = true;
-    if untrusted_attempts {
-        env.call_public(
-            untrusted_account,
-            SealedAuction::at(auction).create_listing(
-                999,
-                token,
-                100,
-                close_timestamp,
-                close_timestamp + 100,
-                deployer,
-                0,
-                0,
-                0,
-            ),
-        );
-    }
-    if !untrusted_attempts {
-        env.call_public(
+    env.call_public(
+        untrusted_account,
+        SealedAuction::at(auction).create_listing(
+            999,
+            token,
+            100,
+            close_timestamp,
+            close_timestamp + 100,
             deployer,
-            SealedAuction::at(auction).create_listing(
-                999,
-                token,
-                100,
-                close_timestamp,
-                close_timestamp + 100,
-                deployer,
-                0,
-                0,
-                0,
-            ),
-        );
-    }
+            0,
+            0,
+            0,
+        ),
+    );
 }
 
 #[test(should_fail_with = "only the current asset verifier can rotate the role")]
