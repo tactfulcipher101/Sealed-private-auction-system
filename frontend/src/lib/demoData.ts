@@ -38,7 +38,7 @@ export const demoListings: Listing[] = [
     stakeBps: 1000,
     legalClosingWindowSeconds: 604800,
     currency: "cNGN",
-    verifiedBy: "NIESV-registered surveyor",
+    verifiedBy: "Sample listing, not verified",
     sellerWalletAddress: "0x7a41...9c2e",
   },
   {
@@ -52,7 +52,7 @@ export const demoListings: Listing[] = [
     stakeBps: 0,
     legalClosingWindowSeconds: 0,
     currency: "USDC",
-    verifiedBy: "Real Authentication",
+    verifiedBy: "Sample listing, not verified",
     sellerWalletAddress: "0xb318...44f0",
   },
   {
@@ -65,7 +65,7 @@ export const demoListings: Listing[] = [
     stakeBps: 1000,
     legalClosingWindowSeconds: 604800,
     currency: "USDT",
-    verifiedBy: "ESVARBON-registered valuer",
+    verifiedBy: "Sample listing, not verified",
     sellerWalletAddress: "0x2e6d...d17a",
   },
   {
@@ -78,7 +78,7 @@ export const demoListings: Listing[] = [
     stakeBps: 0,
     legalClosingWindowSeconds: 0,
     currency: "EURC",
-    verifiedBy: "Real Authentication",
+    verifiedBy: "Sample listing, not verified",
     sellerWalletAddress: "0xf90c...7b21",
   },
 ];
