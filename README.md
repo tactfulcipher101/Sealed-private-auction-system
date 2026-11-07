@@ -13,7 +13,7 @@ Sealed is a sealed-bid auction written in Noir for the Aztec network. Bids are c
 - `commit_bid` rejects a bid from the same address as the listing's seller. A seller can still bid from a second account.
 - Every claimant needs the auction secret to claim. There is no custody scheme for that secret yet.
 - Not implemented yet: `listing_id` inside the commitment hash, and expiry for guardian votes.
-- The frontend is a demo plus a testnet deploy wizard. Catalog, bidding and settlement screens are previews that do not call the contract, apart from the sell step and a read-only status line on listings created on-chain (not yet run against a live wallet). The deploy wizard has been updated for the current constructor but has not been run end-to-end on a live network.
+- The frontend is a demo plus a testnet deploy wizard. The four catalog entries are static samples with simulated bidding and do not call the contract. Listings created on-chain appear only when listed in `onChainListings.ts`, and they use a real commit and reveal flow in a browser wallet. That flow was run once on testnet with the test token: commit and reveal in the browser, close and finalize from the CLI. The page also has close and finalize controls that take a listing id; those were not exercised from the page. Claims are CLI-only and have not been tested end to end. The deploy wizard has been updated for the current constructor but has not been run end-to-end on a live network.
 
 ## What the protocol does
 
