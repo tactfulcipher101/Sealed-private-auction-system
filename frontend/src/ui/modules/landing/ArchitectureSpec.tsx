@@ -40,7 +40,7 @@ export function ArchitectureSpec() {
             </div>
             <h4 className="text-base font-semibold text-slate-100">3. Reveal-at-Close Settlement</h4>
             <p className="text-xs text-slate-400 leading-relaxed">
-              At auction expiry, bid amounts are revealed to calculate the highest bidder deterministically. Losing bid commitments are unlocked immediately and refunded automatically.
+              At auction expiry, bid amounts are revealed to calculate the highest bidder deterministically. Losing bidders then claim a full refund with a claim transaction.
             </p>
           </div>
         </div>

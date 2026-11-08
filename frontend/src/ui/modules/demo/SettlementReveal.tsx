@@ -65,7 +65,7 @@ export function SettlementReveal({ listing, bids, isSeller, onRestart }: Settlem
                   {formatCurrency(bid.amount, bid.currency)}
                   {!isWinner && (
                     <span className="ml-2 inline-flex items-center gap-1 text-slate-600">
-                      <Undo2 className="h-3 w-3" /> refunded
+                      <Undo2 className="h-3 w-3" /> refund claimable
                     </span>
                   )}
                 </motion.span>
@@ -92,7 +92,7 @@ export function SettlementReveal({ listing, bids, isSeller, onRestart }: Settlem
                 (listing.category === "real-estate" ? "legal closing." : "handoff and inspection.")
               : "Your " +
                 formatCurrency(userBid.amount, userBid.currency) +
-                " bid is eligible for refund. The deployed contract requires you to submit the losing-bid claim transaction."}
+                " bid is eligible for refund. The refund is paid when a losing-bid claim is submitted from the CLI; this page cannot submit it."}
           </p>
         </motion.div>
       )}

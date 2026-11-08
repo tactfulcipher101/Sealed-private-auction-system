@@ -31,7 +31,7 @@ export function ConfirmClosingPanel({ connection }: ConfirmClosingPanelProps) {
     <div className="mt-8 space-y-3 rounded-lg border border-slate-800 bg-slate-950/60 p-4">
       <p className="text-xs font-medium text-slate-200">Seller: confirm legal closing</p>
       <p className="text-xs leading-5 text-slate-500">
-        Only the listing seller account can submit this. It unlocks the winner stake claim and moves no funds.
+        Only the listing seller account can submit this, only for real-estate listings, and only after the auction is settled. It lets the winning bidder claim their stake (a CLI-only claim) and moves no funds itself.
       </p>
       <input
         type="text"

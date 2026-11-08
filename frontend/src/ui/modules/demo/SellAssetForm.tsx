@@ -256,7 +256,7 @@ export function SellAssetForm({ connection, onListingCreated, onCancel }: SellAs
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
-            <label className="mb-2 block text-xs font-medium text-slate-300">Auction closes in (minutes, 5 or more)</label>
+            <label className="mb-2 block text-xs font-medium text-slate-300">Auction closes in (minutes, 5 or more; 10 or more recommended)</label>
             <input
               type="number"
               min="5"
@@ -267,7 +267,7 @@ export function SellAssetForm({ connection, onListingCreated, onCancel }: SellAs
             />
           </div>
           <div>
-            <label className="mb-2 block text-xs font-medium text-slate-300">Reveal window (minutes)</label>
+            <label className="mb-2 block text-xs font-medium text-slate-300">Reveal window (minutes, 10 or more recommended)</label>
             <input
               type="number"
               min="1"

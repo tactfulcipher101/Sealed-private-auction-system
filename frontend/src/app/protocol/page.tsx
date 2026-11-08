@@ -123,11 +123,11 @@ export default function ProtocolOverviewPage() {
             {/* Step 4 */}
             <div className="p-6 rounded-lg bg-slate-900/30 border border-slate-800/80 space-y-3">
               <div className="flex items-center justify-between">
-                <h3 className="text-base font-semibold text-slate-200">Step 4: Settlement & Immediate Refunds</h3>
+                <h3 className="text-base font-semibold text-slate-200">Step 4: Settlement & Refund Claims</h3>
                 <span className="text-[11px] font-mono text-slate-500">REVEAL_AT_CLOSE</span>
               </div>
               <p className="text-xs text-slate-400 leading-relaxed">
-                When the auction timer expires, commitments are evaluated via Reveal-at-Close. The contract deterministically calculates the highest valid bid. Losing bid notes are unlocked immediately and returned directly to wallets without a manual claim process.
+                When the auction timer expires, commitments are evaluated via Reveal-at-Close. The contract deterministically calculates the highest valid bid. After settlement, losing bidders claim a full refund with a claim transaction, and the winning bid pays the seller minus the settlement fee.
               </p>
             </div>
 

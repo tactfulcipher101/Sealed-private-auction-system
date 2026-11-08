@@ -38,7 +38,7 @@ export function SettlementStepsPanel({ connection }: SettlementStepsPanelProps) 
     <div className="mt-6 space-y-3 rounded-lg border border-slate-800 bg-slate-950/60 p-4">
       <p className="text-xs font-medium text-slate-200">Anyone: close and finalize an auction</p>
       <p className="text-xs leading-5 text-slate-500">
-        Close works once the close time has passed. Finalize works after the reveal deadline, or once every bid is revealed. Neither moves funds.
+        Close works once the close time has passed. Finalize works after the reveal deadline, or once every bid is revealed. Neither moves funds. Winner, loser and late-reveal claims are CLI-only for now.
       </p>
       <input
         type="text"
