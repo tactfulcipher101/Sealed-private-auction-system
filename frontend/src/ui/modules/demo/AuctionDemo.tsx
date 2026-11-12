@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Gavel, Tags, LogOut } from "lucide-react";
 import { demoListings, type Listing, type SimulatedBid } from "@/lib/demoData";
-import type { ConnectedAztecWallet } from "@/lib/aztecWallet";
 import { WalletConnect } from "./WalletConnect";
 import { ListingCatalog } from "./ListingCatalog";
 import { ListingDetail } from "./ListingDetail";
@@ -13,12 +12,15 @@ import { SettlementReveal } from "./SettlementReveal";
 import { SellAssetForm } from "./SellAssetForm";
 import { ConfirmClosingPanel } from "./ConfirmClosingPanel";
 import { SettlementStepsPanel } from "./SettlementStepsPanel";
-import { loadOnChainListings } from "@/lib/sealedAuction";
+import { loadOnChainListings, loadListingByIdOnChain } from "@/lib/sealedAuction";
+import { parseShareLink } from "@/lib/shareLink";
+import { useWalletSession } from "@/ui/layout/WalletSessionProvider";
+import { loadSavedListings, saveListing } from "@/lib/listingStore";
 
 type DemoStep = "catalog" | "sell" | "listing" | "bidding" | "live" | "settled";
 
 export function AuctionDemo() {
-  const [connection, setConnection] = useState<ConnectedAztecWallet | null>(null);
+  const { connection, setConnection } = useWalletSession();
   const [step, setStep] = useState<DemoStep>("catalog");
   const [listings, setListings] = useState<Listing[]>(demoListings);
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
@@ -34,6 +36,7 @@ export function AuctionDemo() {
 
   function handleListingCreated(listing: Listing) {
     setListings((current) => [listing, ...current]);
+    if (connection) saveListing(connection.address, listing);
     setJustListedId(listing.id);
     setStep("catalog");
   }
@@ -59,6 +62,7 @@ export function AuctionDemo() {
   async function handleSwitchWallet() {
     await connection?.disconnect();
     setConnection(null);
+    setListings(demoListings);
     setSelectedListing(null);
     setUserBid(null);
     setFinalBids([]);
@@ -96,6 +100,37 @@ export function AuctionDemo() {
         clearInterval(refreshTimer);
       };
     }, [connection]);
+
+  useEffect(() => {
+    if (!connection) return;
+    const saved = loadSavedListings(connection.address);
+    if (saved.length === 0) return;
+    setListings((current) => {
+      const knownIds = new Set(current.map((entry) => entry.id));
+      return [...saved.filter((entry) => !knownIds.has(entry.id)), ...current];
+    });
+  }, [connection]);
+
+  const sharedLinkHandled = useRef(false);
+  useEffect(() => {
+    if (!connection || sharedLinkHandled.current) return;
+    sharedLinkHandled.current = true;
+    const shared = parseShareLink();
+    if (!shared) return;
+    const activeConnection = connection;
+    void loadListingByIdOnChain(activeConnection, shared.id, shared.meta)
+      .then((loaded) => {
+        const sameId = (entry: Listing) => entry.id.toLowerCase() === loaded.id.toLowerCase();
+        const saved = loadSavedListings(activeConnection.address).find(sameId);
+        const chosen = saved ?? loaded;
+        setListings((current) => (current.some(sameId) ? current : [chosen, ...current]));
+        setSelectedListing(chosen);
+        setStep("listing");
+      })
+      .catch((error: unknown) => {
+        setLoaderNote("Could not open the shared listing: " + (error instanceof Error ? error.message : "read failed"));
+      });
+  }, [connection]);
 
   const isOwnListing = selectedListing?.sellerWalletAddress === connection?.address;
 

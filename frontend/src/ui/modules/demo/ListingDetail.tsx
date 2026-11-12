@@ -6,6 +6,7 @@ import { Fr } from "@aztec-labs/foundation/curves/bn254";
 import type { ConnectedAztecWallet } from "@/lib/aztecWallet";
 import { readListingOnChain } from "@/lib/sealedAuction";
 import { OnChainBidPanel } from "./OnChainBidPanel";
+import { buildShareLink } from "@/lib/shareLink";
 
 interface ListingDetailProps {
   listing: Listing;
@@ -19,6 +20,7 @@ type ChainStatus = { id: string; line: string; status: bigint | null };
 
 export function ListingDetail({ listing, isOwnListing, connection, onEnterBidding, onBack }: ListingDetailProps) {
   const [chainStatus, setChainStatus] = useState<ChainStatus | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   useEffect(() => {
     if (!listing.onChain || !connection) return;
@@ -57,6 +59,17 @@ export function ListingDetail({ listing, isOwnListing, connection, onEnterBiddin
       clearInterval(refreshTimer);
     };
   }, [connection, listing.id, listing.onChain]);
+
+  async function handleCopyLink() {
+    const link = buildShareLink(listing);
+    try {
+      await navigator.clipboard.writeText(link);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    } catch {
+      window.prompt("Copy this link", link);
+    }
+  }
 
   const currentStatus = chainStatus?.id === listing.id ? chainStatus.status : null;
 
@@ -118,6 +131,13 @@ export function ListingDetail({ listing, isOwnListing, connection, onEnterBiddin
               revealWindow={currentStatus === BigInt(2)}
             />
           )}
+            <button
+              type="button"
+              onClick={() => void handleCopyLink()}
+              className="rounded-md border border-slate-700 px-3 py-1.5 text-[11px] text-slate-300 hover:border-slate-500 hover:text-slate-100 transition-colors"
+            >
+              {linkCopied ? "Link copied" : "Copy share link"}
+            </button>
           {listing.transactionHash && (
             <p className="break-all font-mono text-[10px] text-emerald-200/70">Transaction {listing.transactionHash}</p>
           )}

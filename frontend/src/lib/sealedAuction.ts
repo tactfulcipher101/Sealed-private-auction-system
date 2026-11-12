@@ -540,6 +540,65 @@ export async function loadOnChainListings(connection: ConnectedAztecWallet): Pro
   return { listings, skipped };
 }
 
+export async function loadListingByIdOnChain(
+  connection: ConnectedAztecWallet,
+  listingIdHex: string,
+  metadata: { title: string; region: string; description: string },
+): Promise<Listing> {
+  if (!/^0x[0-9a-fA-F]{64}$/.test(listingIdHex)) {
+    throw new Error("Listing id must be 0x followed by 64 hex characters.");
+  }
+  await assertSealedAuctionFunction("get_listing");
+  await assertSealedAuctionFunction("get_status");
+  const config = getNetworkConfig();
+  const auctionAddress = configuredAddress(config.contractAddress, "Auction contract");
+  const connectedAddress = configuredAddress(connection.address, "Connected account");
+  const artifact = await getSealedAuctionArtifact();
+  await registerAuctionWithWallet(connection, artifact, auctionAddress);
+  const auction = Contract.at(auctionAddress, artifact, connection.wallet);
+  const methods = auction.methods as unknown as SealedAuctionMethods;
+  const listingId = Fr.fromString(listingIdHex);
+  const statusResult = await methods.get_status(listingId).simulate({ from: connectedAddress });
+  if (typeof statusResult.result !== "bigint" || statusResult.result === BigInt(0)) {
+    throw new Error("No listing with this id exists on the auction contract.");
+  }
+  const { result } = await methods.get_listing(listingId).simulate({ from: connectedAddress });
+  const info = result as {
+    seller?: unknown;
+    reserve_price?: unknown;
+    verified?: unknown;
+    category?: unknown;
+    stake_bps?: unknown;
+    legal_closing_window?: unknown;
+  } | null | undefined;
+  const sellerText = info ? readAddressText(info.seller) : null;
+  if (
+    !info ||
+    !sellerText ||
+    typeof info.verified !== "boolean" ||
+    typeof info.reserve_price !== "bigint" ||
+    typeof info.category !== "bigint" ||
+    typeof info.stake_bps !== "bigint" ||
+    typeof info.legal_closing_window !== "bigint"
+  ) {
+    throw new Error("get_listing returned an unexpected value.");
+  }
+  return {
+    id: listingIdHex,
+    title: metadata.title,
+    category: info.category === BigInt(1) ? "real-estate" : "mobile-goods",
+    region: metadata.region,
+    description: metadata.description,
+    reservePrice: Number(info.reserve_price),
+    stakeBps: Number(info.stake_bps),
+    legalClosingWindowSeconds: Number(info.legal_closing_window),
+    currency: "TEST",
+    verifiedBy: "Not independently verified (permissionless demo listing)",
+    sellerWalletAddress: sellerText,
+    onChain: true,
+  };
+}
+
 export async function revealBidOnChain(connection: ConnectedAztecWallet, rawListingId: string): Promise<string> {
   const listingIdHex = /^0x[0-9a-fA-F]{1,64}$/.test(rawListingId) ? "0x" + rawListingId.slice(2).padStart(64, "0") : rawListingId;
   if (!/^0x[0-9a-fA-F]{64}$/.test(listingIdHex)) {

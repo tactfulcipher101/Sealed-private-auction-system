@@ -13,7 +13,36 @@ interface SellAssetFormProps {
   onCancel: () => void;
 }
 
-const MAX_IMAGES = 4;
+const MAX_IMAGE_WIDTH = 800;
+
+// Shrinks a photo to a JPEG data URL so it survives a page reload (blob URLs do not).
+function resizeImageToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(file);
+    const image = new Image();
+    image.onload = () => {
+      const scale = Math.min(1, MAX_IMAGE_WIDTH / image.width);
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(image.width * scale);
+      canvas.height = Math.round(image.height * scale);
+      const context = canvas.getContext("2d");
+      URL.revokeObjectURL(objectUrl);
+      if (!context) {
+        reject(new Error("Canvas is not available."));
+        return;
+      }
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL("image/jpeg", 0.7));
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error("Could not read the image."));
+    };
+    image.src = objectUrl;
+  });
+}
+
+const MAX_IMAGES = 3;
 
 export function SellAssetForm({ connection, onListingCreated, onCancel }: SellAssetFormProps) {
   const config = getNetworkConfig();
@@ -34,20 +63,18 @@ export function SellAssetForm({ connection, onListingCreated, onCancel }: SellAs
   const [error, setError] = useState<string | null>(null);
   const hasSelectedToken = Boolean(config.tokenAddresses[currency]);
 
-  function handleImageSelect(event: ChangeEvent<HTMLInputElement>) {
+  async function handleImageSelect(event: ChangeEvent<HTMLInputElement>) {
     const files = event.target.files;
     if (!files) return;
     const remainingSlots = MAX_IMAGES - imagePreviews.length;
     const selectedFiles = Array.from(files).slice(0, remainingSlots);
-    const newPreviews = selectedFiles.map((file) => URL.createObjectURL(file));
+    const newPreviews = (await Promise.all(selectedFiles.map((file) => resizeImageToDataUrl(file).catch(() => null)))).filter((url): url is string => url !== null);
     setImagePreviews((current) => [...current, ...newPreviews]);
     event.target.value = "";
   }
 
   function handleRemoveImage(index: number) {
     setImagePreviews((current) => {
-      const target = current[index];
-      if (target) URL.revokeObjectURL(target);
       return current.filter((_, i) => i !== index);
     });
   }
@@ -64,8 +91,8 @@ export function SellAssetForm({ connection, onListingCreated, onCancel }: SellAs
       setError("Complete the listing details, seller address, and positive reserve price.");
       return;
     }
-    if (!Number.isSafeInteger(parsedCloseMinutes) || !Number.isSafeInteger(parsedRevealMinutes) || parsedCloseMinutes < 5 || parsedRevealMinutes < 1) {
-      setError("Closing window must be at least 5 whole minutes and the reveal window at least 1 whole minute.");
+    if (!Number.isSafeInteger(parsedCloseMinutes) || !Number.isSafeInteger(parsedRevealMinutes) || parsedCloseMinutes < 5 || parsedRevealMinutes < 10) {
+      setError("Closing window must be at least 5 whole minutes and the reveal window at least 10 whole minutes.");
       return;
     }
     const categoryStakeBps = category === "real-estate" ? Math.round(parsedStakePercent * 100) : 0;
@@ -166,7 +193,7 @@ export function SellAssetForm({ connection, onListingCreated, onCancel }: SellAs
             )}
           </div>
           <p className="text-[11px] text-slate-500 mt-2">
-            Up to {MAX_IMAGES} photos. Stored only in this browser session for the demo.
+            Up to {MAX_IMAGES} photos. Saved only in this browser, not on chain.
           </p>
         </div>
 
@@ -267,10 +294,10 @@ export function SellAssetForm({ connection, onListingCreated, onCancel }: SellAs
             />
           </div>
           <div>
-            <label className="mb-2 block text-xs font-medium text-slate-300">Reveal window (minutes, 10 or more recommended)</label>
+            <label className="mb-2 block text-xs font-medium text-slate-300">Reveal window (minutes, 10 or more)</label>
             <input
               type="number"
-              min="1"
+              min="10"
               step="1"
               value={revealWindowMinutes}
               onChange={(event) => setRevealWindowMinutes(event.target.value)}

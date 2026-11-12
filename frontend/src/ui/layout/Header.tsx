@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Shield } from "lucide-react";
 
 export function Header() {
@@ -14,14 +15,14 @@ export function Header() {
         </div>
 
         <nav className="hidden md:flex items-center gap-8 text-xs font-medium text-slate-400">
-          <a href="/about" className="hover:text-slate-100 transition-colors">About</a>
-          <a href="/protocol" className="hover:text-slate-100 transition-colors">Blueprint</a>
-          <a href="/demo" className="hover:text-slate-100 transition-colors">Live Demo</a>
-          <a href="/deploy" className="hover:text-slate-100 transition-colors">Testnet Deploy</a>
+          <Link href="/about" className="hover:text-slate-100 transition-colors">About</Link>
+          <Link href="/protocol" className="hover:text-slate-100 transition-colors">Blueprint</Link>
+          <Link href="/demo" className="hover:text-slate-100 transition-colors">Live Demo</Link>
+          <Link href="/deploy" className="hover:text-slate-100 transition-colors">Testnet Deploy</Link>
         </nav>
 
         <div className="flex shrink-0 items-center gap-4">
-          <a href="/demo" className="px-3 sm:px-4 py-2 text-xs font-medium bg-slate-100 text-slate-950 rounded-md hover:bg-white transition-all">Launch Demo</a>
+          <Link href="/demo" className="px-3 sm:px-4 py-2 text-xs font-medium bg-slate-100 text-slate-950 rounded-md hover:bg-white transition-all">Launch Demo</Link>
         </div>
       </div>
     </header>
