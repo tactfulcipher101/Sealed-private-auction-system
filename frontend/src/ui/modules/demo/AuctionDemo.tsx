@@ -28,6 +28,9 @@ export function AuctionDemo() {
   const [finalBids, setFinalBids] = useState<SimulatedBid[]>([]);
   const [justListedId, setJustListedId] = useState<string | null>(null);
   const [loaderNote, setLoaderNote] = useState<string | null>(null);
+  const [sharedStatus, setSharedStatus] = useState<string | null>(null);
+  const [sharedError, setSharedError] = useState<string | null>(null);
+  const [pendingShareTitle, setPendingShareTitle] = useState<string | null>(null);
 
   function handleSelectListing(listing: Listing) {
     setSelectedListing(listing);
@@ -111,6 +114,11 @@ export function AuctionDemo() {
     });
   }, [connection]);
 
+  useEffect(() => {
+    const pending = parseShareLink();
+    if (pending) setPendingShareTitle(pending.meta.title);
+  }, []);
+
   const sharedLinkHandled = useRef(false);
   useEffect(() => {
     if (!connection || sharedLinkHandled.current) return;
@@ -118,6 +126,7 @@ export function AuctionDemo() {
     const shared = parseShareLink();
     if (!shared) return;
     const activeConnection = connection;
+    setSharedStatus("Opening shared listing...");
     void loadListingByIdOnChain(activeConnection, shared.id, shared.meta)
       .then((loaded) => {
         const sameId = (entry: Listing) => entry.id.toLowerCase() === loaded.id.toLowerCase();
@@ -125,10 +134,12 @@ export function AuctionDemo() {
         const chosen = saved ?? loaded;
         setListings((current) => (current.some(sameId) ? current : [chosen, ...current]));
         setSelectedListing(chosen);
+          setSharedStatus(null);
         setStep("listing");
       })
       .catch((error: unknown) => {
-        setLoaderNote("Could not open the shared listing: " + (error instanceof Error ? error.message : "read failed"));
+        setSharedStatus(null);
+          setSharedError("Could not open the shared listing: " + (error instanceof Error ? error.message : "read failed"));
       });
   }, [connection]);
 
@@ -137,7 +148,12 @@ export function AuctionDemo() {
   if (!connection) {
     return (
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-10 sm:py-16">
-        <WalletConnect onConnected={setConnection} />
+        {pendingShareTitle && (
+            <p className="mb-6 rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 text-xs leading-5 text-emerald-100/90">
+              You opened a link to the listing &quot;{pendingShareTitle}&quot;. Connect your wallet and it will open automatically.
+            </p>
+          )}
+          <WalletConnect onConnected={setConnection} />
       </div>
     );
   }
@@ -158,7 +174,15 @@ export function AuctionDemo() {
         Wallet connected. Listings on a newly deployed contract are permissionless and unverified. Bid reveal is manual from the bidder wallet; claims are CLI-only and require the auction key in the claimant&apos;s PXE.
       </p>
 
-      {loaderNote && (
+      {sharedStatus && (
+          <p className="mb-8 text-xs leading-5 text-emerald-200/80">{sharedStatus}</p>
+        )}
+
+        {sharedError && (
+          <p className="mb-8 text-xs leading-5 text-rose-300">{sharedError}</p>
+        )}
+
+        {loaderNote && (
         <p className="mb-8 text-xs leading-5 text-amber-200/80">{loaderNote}</p>
       )}
 

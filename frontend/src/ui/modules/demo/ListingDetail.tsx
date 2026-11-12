@@ -36,7 +36,7 @@ export function ListingDetail({ listing, isOwnListing, connection, onEnterBiddin
         if (!cancelled) {
           setChainStatus({
             id: targetListingId,
-            line: `Chain status: ${state.statusLabel}, close timestamp ${state.closeTimestamp}`,
+            line: `Chain status: ${state.status === BigInt(1) && Date.now() / 1000 >= Number(state.closeTimestamp) ? "close time passed, no bids accepted, waiting for close" : state.statusLabel}, closes ${new Date(Number(state.closeTimestamp) * 1000).toLocaleString()} (timestamp ${state.closeTimestamp})`,
             status: state.status,
           });
         }
