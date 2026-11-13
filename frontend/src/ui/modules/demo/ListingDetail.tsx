@@ -4,7 +4,8 @@ import { formatCurrency } from "@/lib/demoCrypto";
 import { useEffect, useState } from "react";
 import { Fr } from "@aztec-labs/foundation/curves/bn254";
 import type { ConnectedAztecWallet } from "@/lib/aztecWallet";
-import { readListingOnChain } from "@/lib/sealedAuction";
+import { readListingOnChain, readSettlementOnChain } from "@/lib/sealedAuction";
+import { loadBidRecord } from "@/lib/bidRecord";
 import { OnChainBidPanel } from "./OnChainBidPanel";
 import { buildShareLink } from "@/lib/shareLink";
 
@@ -21,6 +22,7 @@ type ChainStatus = { id: string; line: string; status: bigint | null };
 export function ListingDetail({ listing, isOwnListing, connection, onEnterBidding, onBack }: ListingDetailProps) {
   const [chainStatus, setChainStatus] = useState<ChainStatus | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [settlement, setSettlement] = useState<{ id: string; hasWinner: boolean; winningAmount: bigint } | null>(null);
 
   useEffect(() => {
     if (!listing.onChain || !connection) return;
@@ -72,6 +74,23 @@ export function ListingDetail({ listing, isOwnListing, connection, onEnterBiddin
   }
 
   const currentStatus = chainStatus?.id === listing.id ? chainStatus.status : null;
+
+  useEffect(() => {
+    if (!listing.onChain || !connection || currentStatus !== BigInt(3)) return;
+    let cancelled = false;
+    void readSettlementOnChain(connection, Fr.fromString(listing.id))
+      .then((result) => {
+        if (!cancelled) setSettlement({ id: listing.id, ...result });
+      })
+      .catch((error) => console.warn("settlement read failed", error));
+    return () => {
+      cancelled = true;
+    };
+  }, [connection, listing.id, listing.onChain, currentStatus]);
+
+  const settled = settlement && settlement.id === listing.id ? settlement : null;
+
+  const ownBid = settled && connection ? loadBidRecord(connection.address, listing.id) : null;
 
   return (
     <div className="space-y-6">
@@ -138,6 +157,25 @@ export function ListingDetail({ listing, isOwnListing, connection, onEnterBiddin
             >
               {linkCopied ? "Link copied" : "Copy share link"}
             </button>
+          {settled && (
+            <div className="space-y-1 rounded border border-slate-700 bg-slate-950/60 p-3">
+              <p className="text-xs font-medium text-slate-200">
+                {settled.hasWinner
+                  ? "Auction settled. Winning bid: " + settled.winningAmount.toString() + " " + listing.currency
+                  : "Auction settled with no winner. No bid was revealed in time."}
+              </p>
+              {ownBid !== null && (
+                <p className="text-[11px] text-slate-300">
+                  {!settled.hasWinner
+                    ? "Your bid of " + ownBid + " was not revealed in time."
+                    : BigInt(ownBid) === settled.winningAmount
+                      ? "Your bid of " + ownBid + " won."
+                      : "Your bid of " + ownBid + " did not win."}
+                </p>
+              )}
+              <p className="text-[11px] text-slate-400">Payouts and refunds are CLI-only claims for now.</p>
+            </div>
+          )}
           {listing.transactionHash && (
             <p className="break-all font-mono text-[10px] text-emerald-200/70">Transaction {listing.transactionHash}</p>
           )}

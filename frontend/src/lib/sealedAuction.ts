@@ -90,6 +90,9 @@ interface SealedAuctionMethods {
   get_listing: (listing_id: Fr) => {
     simulate: (options: { from: AztecAddress }) => Promise<{ result: unknown }>;
   };
+  get_settlement: (listing_id: Fr) => {
+    simulate: (options: { from: AztecAddress }) => Promise<{ result: unknown }>;
+  };
   confirm_closing: (listing_id: Fr) => {
     send: (options: { from: AztecAddress; fee?: { paymentMethod: SponsoredFeePaymentMethod } }) => Promise<{
       receipt: { hasExecutionSucceeded: () => boolean; error?: string; txHash: { toString: () => string } };
@@ -597,6 +600,25 @@ export async function loadListingByIdOnChain(
     sellerWalletAddress: sellerText,
     onChain: true,
   };
+}
+
+export async function readSettlementOnChain(
+  connection: ConnectedAztecWallet,
+  listingId: Fr,
+): Promise<{ hasWinner: boolean; winningAmount: bigint }> {
+  await assertSealedAuctionFunction("get_settlement");
+  const config = getNetworkConfig();
+  const auctionAddress = configuredAddress(config.contractAddress, "Auction contract");
+  const connectedAddress = configuredAddress(connection.address, "Connected account");
+  const artifact = await getSealedAuctionArtifact();
+  const auction = Contract.at(auctionAddress, artifact, connection.wallet);
+  const methods = auction.methods as unknown as SealedAuctionMethods;
+  const { result } = await methods.get_settlement(listingId).simulate({ from: connectedAddress });
+  const info = result as { has_winner?: unknown; winning_amount?: unknown } | null | undefined;
+  if (!info || typeof info.has_winner !== "boolean" || typeof info.winning_amount !== "bigint") {
+    throw new Error("get_settlement returned an unexpected value.");
+  }
+  return { hasWinner: info.has_winner, winningAmount: info.winning_amount };
 }
 
 export async function revealBidOnChain(connection: ConnectedAztecWallet, rawListingId: string): Promise<string> {

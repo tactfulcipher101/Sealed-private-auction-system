@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { Listing } from "@/lib/demoData";
 import type { ConnectedAztecWallet } from "@/lib/aztecWallet";
 import { commitBidOnChain, faucetTestTokens, revealBidOnChain, type CommittedBid } from "@/lib/sealedAuction";
+import { saveBidRecord } from "@/lib/bidRecord";
 
 const MAX_U128 = BigInt("340282366920938463463374607431768211455");
 
@@ -77,6 +78,7 @@ export function OnChainBidPanel({ listing, connection, revealWindow }: OnChainBi
         stakeBps: listing.stakeBps,
       });
       setCommitted(result);
+      saveBidRecord(connection.address, listing.id, result.amount);
     } catch (error) {
       setErrorText(error instanceof Error ? error.message : "Bid commitment failed.");
     } finally {
