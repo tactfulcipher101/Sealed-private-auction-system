@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { Fr } from "@aztec-labs/foundation/curves/bn254";
 import type { ConnectedAztecWallet } from "@/lib/aztecWallet";
 import { readListingOnChain, readSettlementOnChain } from "@/lib/sealedAuction";
-import { loadBidRecord } from "@/lib/bidRecord";
+import { loadBidRecord, loadBidRevealed } from "@/lib/bidRecord";
 import { OnChainBidPanel } from "./OnChainBidPanel";
 import { buildShareLink } from "@/lib/shareLink";
 
@@ -17,7 +17,7 @@ interface ListingDetailProps {
   onBack: () => void;
 }
 
-type ChainStatus = { id: string; line: string; status: bigint | null };
+type ChainStatus = { id: string; line: string; status: bigint | null; closeTimestamp: bigint | null };
 
 export function ListingDetail({ listing, isOwnListing, connection, onEnterBidding, onBack }: ListingDetailProps) {
   const [chainStatus, setChainStatus] = useState<ChainStatus | null>(null);
@@ -34,12 +34,16 @@ export function ListingDetail({ listing, isOwnListing, connection, onEnterBiddin
       if (inFlight) return;
       inFlight = true;
       try {
-        const state = await readListingOnChain(activeConnection, Fr.fromString(targetListingId));
+        const state = await Promise.race([
+            readListingOnChain(activeConnection, Fr.fromString(targetListingId)),
+            new Promise<never>((_, reject) => setTimeout(() => reject(new Error("wallet read timed out")), 45000)),
+          ]);
         if (!cancelled) {
           setChainStatus({
             id: targetListingId,
             line: `Chain status: ${state.status === BigInt(1) && Date.now() / 1000 >= Number(state.closeTimestamp) ? "close time passed, no bids accepted, waiting for close" : state.statusLabel}, closes ${new Date(Number(state.closeTimestamp) * 1000).toLocaleString()} (timestamp ${state.closeTimestamp})`,
             status: state.status,
+              closeTimestamp: state.closeTimestamp,
           });
         }
       } catch (error) {
@@ -48,6 +52,7 @@ export function ListingDetail({ listing, isOwnListing, connection, onEnterBiddin
             id: targetListingId,
             line: `Chain status unavailable: ${error instanceof Error ? error.message : "read failed"}`,
             status: null,
+              closeTimestamp: null,
           });
         }
       } finally {
@@ -74,6 +79,11 @@ export function ListingDetail({ listing, isOwnListing, connection, onEnterBiddin
   }
 
   const currentStatus = chainStatus?.id === listing.id ? chainStatus.status : null;
+  const closePassed =
+    chainStatus?.id === listing.id &&
+    currentStatus === BigInt(1) &&
+    chainStatus.closeTimestamp !== null &&
+    Date.now() / 1000 >= Number(chainStatus.closeTimestamp);
 
   useEffect(() => {
     if (!listing.onChain || !connection || currentStatus !== BigInt(3)) return;
@@ -91,6 +101,17 @@ export function ListingDetail({ listing, isOwnListing, connection, onEnterBiddin
   const settled = settlement && settlement.id === listing.id ? settlement : null;
 
   const ownBid = settled && connection ? loadBidRecord(connection.address, listing.id) : null;
+  const ownRevealed = settled && connection ? loadBidRevealed(connection.address, listing.id) : false;
+  let ownLine: string | null = null;
+  if (settled && ownBid !== null) {
+    if (settled.hasWinner && BigInt(ownBid) === settled.winningAmount) {
+      ownLine = "Your bid of " + ownBid + " won.";
+    } else if (ownRevealed) {
+      ownLine = "Your bid of " + ownBid + " did not win.";
+    } else {
+      ownLine = "You committed a bid on this listing but this browser has no record of revealing it. An unrevealed bid cannot win. Its locked funds can be refunded minus a late-reveal penalty (CLI-only claim).";
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -140,6 +161,9 @@ export function ListingDetail({ listing, isOwnListing, connection, onEnterBiddin
           <p className="text-[11px] leading-5 text-slate-400">
             The descriptive metadata shown here is local to this browser session; it is not stored in the auction contract.
           </p>
+          <p className="break-all font-mono text-[10px] text-slate-300">
+            Listing id: <span className="select-all">{listing.id}</span>
+          </p>
           {chainStatus?.id === listing.id && (
             <p className="font-mono text-[11px] text-emerald-200/80">{chainStatus.line}</p>
           )}
@@ -148,6 +172,7 @@ export function ListingDetail({ listing, isOwnListing, connection, onEnterBiddin
               listing={listing}
               connection={connection}
               revealWindow={currentStatus === BigInt(2)}
+              commitClosed={closePassed}
             />
           )}
             <button
@@ -164,15 +189,9 @@ export function ListingDetail({ listing, isOwnListing, connection, onEnterBiddin
                   ? "Auction settled. Winning bid: " + settled.winningAmount.toString() + " " + listing.currency
                   : "Auction settled with no winner. No bid was revealed in time."}
               </p>
-              {ownBid !== null && (
-                <p className="text-[11px] text-slate-300">
-                  {!settled.hasWinner
-                    ? "Your bid of " + ownBid + " was not revealed in time."
-                    : BigInt(ownBid) === settled.winningAmount
-                      ? "Your bid of " + ownBid + " won."
-                      : "Your bid of " + ownBid + " did not win."}
-                </p>
-              )}
+              {ownLine !== null && (
+              <p className="text-[11px] text-slate-300">{ownLine}</p>
+            )}
               <p className="text-[11px] text-slate-400">Payouts and refunds are CLI-only claims for now.</p>
             </div>
           )}

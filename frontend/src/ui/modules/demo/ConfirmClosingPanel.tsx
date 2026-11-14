@@ -38,7 +38,7 @@ export function ConfirmClosingPanel({ connection }: ConfirmClosingPanelProps) {
         value={listingIdText}
         onChange={(event) => setListingIdText(event.target.value)}
         disabled={isSending}
-        placeholder="Listing id, 0x-prefixed hex"
+        placeholder="Listing id: 0x plus 64 hex digits"
         className="w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 font-mono text-xs text-slate-100"
       />
       <button

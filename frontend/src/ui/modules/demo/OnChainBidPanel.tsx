@@ -4,7 +4,7 @@ import { useState } from "react";
 import type { Listing } from "@/lib/demoData";
 import type { ConnectedAztecWallet } from "@/lib/aztecWallet";
 import { commitBidOnChain, faucetTestTokens, revealBidOnChain, type CommittedBid } from "@/lib/sealedAuction";
-import { saveBidRecord } from "@/lib/bidRecord";
+import { markBidRevealed, saveBidRecord } from "@/lib/bidRecord";
 
 const MAX_U128 = BigInt("340282366920938463463374607431768211455");
 
@@ -12,9 +12,10 @@ interface OnChainBidPanelProps {
   listing: Listing;
   connection: ConnectedAztecWallet;
   revealWindow: boolean;
+  commitClosed?: boolean;
 }
 
-export function OnChainBidPanel({ listing, connection, revealWindow }: OnChainBidPanelProps) {
+export function OnChainBidPanel({ listing, connection, revealWindow, commitClosed = false }: OnChainBidPanelProps) {
   const [amountText, setAmountText] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
@@ -90,7 +91,9 @@ export function OnChainBidPanel({ listing, connection, revealWindow }: OnChainBi
     setErrorText(null);
     setIsRevealing(true);
     try {
-      setRevealTxHash(await revealBidOnChain(connection, listing.id));
+      const revealTxHashValue = await revealBidOnChain(connection, listing.id);
+      markBidRevealed(connection.address, listing.id);
+      setRevealTxHash(revealTxHashValue);
     } catch (error) {
       setErrorText(error instanceof Error ? error.message : "Bid reveal failed.");
     } finally {
@@ -100,7 +103,9 @@ export function OnChainBidPanel({ listing, connection, revealWindow }: OnChainBi
 
   return (
     <div className="space-y-3 rounded-lg border border-slate-800 bg-slate-950/60 p-4">
-      {revealWindow ? (
+      {commitClosed && !revealWindow ? (
+          <p className="text-xs text-slate-300">Close time passed. No new bids are accepted.</p>
+        ) : revealWindow ? (
         <>
           <p className="text-xs font-medium text-slate-200">Reveal your bid from this bidder wallet</p>
           <p className="text-[11px] leading-5 text-slate-400">
